@@ -1,6 +1,6 @@
 //! libSceVideoOut for the HDR10 scan-out probe: buffers registered in the HDR10 pixel format and
 //! flipped with solid PQ fills. Solid, so the 64 KiB tiling needs no swizzle. The presenter's
-//! own VideoOut path is Mesa's WSI; this is only the probe's.
+//! own `VideoOut` path is Mesa's WSI; this is only the probe's.
 
 use core::ffi::c_void;
 
@@ -104,7 +104,7 @@ fn fill(buffer: &mut [u32], [r, g, b]: [u32; 3]) {
     unsafe { core::arch::x86_64::_mm_mfence() };
 }
 
-/// Opens VideoOut, registers two 3840x2160 HDR10 buffers and flips each phase in turn, logging
+/// Opens `VideoOut`, registers two 3840x2160 HDR10 buffers and flips each phase in turn, logging
 /// every result. Returns the first failing call's code. The display shows the phases while it runs.
 pub fn hdr_scanout_probe(log: &mut dyn FnMut(String)) -> Result<(), i32> {
     // SAFETY: a null parameter block is the default output; the handle is closed below.

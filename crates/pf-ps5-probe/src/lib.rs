@@ -261,7 +261,7 @@ fn affinity(_: &Ctx) -> Result<Outcome> {
     Ok(Outcome::Skip("CPU masks are the console's".into()))
 }
 
-/// VideoOut takes buffers in the HDR10 pixel format and flips them: four solid PQ fills, 8 s each,
+/// `VideoOut` takes buffers in the HDR10 pixel format and flips them: four solid PQ fills, 8 s each,
 /// on the display (the TV's HDR indicator and the picture are the other half of the result).
 #[cfg(target_vendor = "sie")]
 fn hdr_scanout(_: &Ctx) -> Result<Outcome> {

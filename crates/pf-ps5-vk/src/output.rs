@@ -9,7 +9,7 @@ use crate::device::{GpuDevice, Target};
 /// The SDR format. The CSC writes non-linear values, so an `_SRGB` view would apply the
 /// transfer twice.
 pub const FORMAT: vk::Format = vk::Format::B8G8R8A8_UNORM;
-/// The HDR10 format: PQ code values in BT.2020, red in the low bits as VideoOut scans it out.
+/// The HDR10 format: PQ code values in BT.2020, red in the low bits as `VideoOut` scans it out.
 pub const FORMAT_HDR10: vk::Format = vk::Format::A2B10G10R10_UNORM_PACK32;
 
 /// The highest refresh this client asks for, in mHz: 119.88 Hz with a little slack.
