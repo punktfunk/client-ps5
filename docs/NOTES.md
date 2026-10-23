@@ -124,6 +124,13 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
 - **RADV entry:** no loader; `vk_icdGetInstanceProcAddr` from the archive (VK radv_smoke.c).
   One display "PS5 VideoOut", modes largest first with each 119.88 Hz mode before its 59.94 Hz
   one; 119.88 only when `param.json` `attribute3` declares HFR (0x40; VK/TPL ship 0x80040).
+- **HDR10 scan-out:** VideoOut registers 3840x2160 buffers in format `0x8100070422000000`
+  (R10G10B10A2, red low, BT.2020 PQ) only when `param.json` `attribute` carries `0x20000000`;
+  without it `sceVideoOutRegisterBuffers2` returns `80290003` where the SDR format registers the
+  same buffers, and `0x02000000` or `0x40000000` alone don't lift it. With it, 3839 vsync flips
+  at 120 Hz, none failed; the TV shows its HDR badge and the fills in order (red first, so red
+  sits in the low bits). Title process only: a payload gets no direct memory (`80020023`).
+  (PPSA99725 probe-20261022-235054, -235719, -235800, -235850, -235909.)
 - **Videodec2:** title process only (payload contexts fail), `sceSysmoduleLoadModule(207)` first,
   memory type 12 in 16 KiB pages, a DPB at least the stream's references plus one (a six-deep
   one failed every picture `811d0302` against Intel VAAPI's nine references at 1440p; sized from

@@ -2,7 +2,7 @@
   "ageLevel": { "default": 0 },
   "applicationCategoryType": 0,
   "applicationDrmType": "free",
-  "attribute": 0,
+  "attribute": 536870912,
   "attribute2": 0,
   "attribute3": 524352,
   "conceptId": "@CONCEPT_ID@",
