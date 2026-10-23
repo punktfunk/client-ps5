@@ -15,14 +15,13 @@ use punktfunk_core::audio::{crossfade_drop, crossfade_insert, JitterPolicy, Jitt
 use crate::core::media::{AudioFormat, AudioSink, Samples};
 use crate::platform::AudioPort;
 
-/// AudioOut consumes 256-frame grains (5.33 ms at 48 kHz). Keep only the minimum extra packet
-/// margin the shared policy requires, then grow adaptively if this link actually underruns.
+/// No base target: the policy's floor (one 5.33 ms `AudioOut` grain plus a packet) is the depth,
+/// and only underruns grow it. The ceilings and the de-prime stay WASAPI's, so a Wi-Fi link still
+/// has room to grow; a clean link never reaches them.
 const TUNING: JitterTuning = JitterTuning {
     base_target_ms: 0,
-    max_target_ms: 40,
     headroom_ms: 15,
-    hard_cap_ms: 100,
-    deprime_ms: 25,
+    ..JitterTuning::WASAPI
 };
 
 fn playout(channels: u8) -> punktfunk_core::audio::AudioPlayout {
