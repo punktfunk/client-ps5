@@ -169,6 +169,10 @@ pub(super) fn start(
         want.launch.as_deref(),
         want.preset.as_deref(),
     );
+    // The shared settings screen has no HDR row on this console, so nothing could turn it on.
+    if crate::core::caps::video_caps().hdr {
+        settings.hdr_enabled = true;
+    }
     if let Some(overlay) = overlay {
         settings = overlay.apply(&settings);
         settings.clamp_to_caps();

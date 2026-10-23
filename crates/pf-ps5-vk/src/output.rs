@@ -6,9 +6,11 @@ use ash::vk;
 
 use crate::device::{GpuDevice, Target};
 
-/// The format every target uses. The CSC writes non-linear values, so an `_SRGB` view would
-/// apply the transfer twice.
+/// The SDR format. The CSC writes non-linear values, so an `_SRGB` view would apply the
+/// transfer twice.
 pub const FORMAT: vk::Format = vk::Format::B8G8R8A8_UNORM;
+/// The HDR10 format: PQ code values in BT.2020, red in the low bits as VideoOut scans it out.
+pub const FORMAT_HDR10: vk::Format = vk::Format::A2B10G10R10_UNORM_PACK32;
 
 /// The highest refresh this client asks for, in mHz: 119.88 Hz with a little slack.
 const MAX_REFRESH_MHZ: u32 = 120_500;
@@ -30,6 +32,9 @@ pub struct Output {
     kind: Kind,
     pub extent: vk::Extent2D,
     pub refresh_mhz: u32,
+    /// [`FORMAT_HDR10`] in `HDR10_ST2084`, else [`FORMAT`] in sRGB.
+    pub hdr: bool,
+    pub format: vk::Format,
     pub images: Vec<vk::Image>,
     pub views: Vec<vk::ImageView>,
     /// The layout a finished frame leaves the image in.
@@ -37,14 +42,15 @@ pub struct Output {
 }
 
 impl Output {
-    pub fn new(dev: &GpuDevice) -> Result<Self> {
+    /// An HDR10 output where the target can show one; an offscreen target stays SDR.
+    pub fn new(dev: &GpuDevice, hdr: bool) -> Result<Self> {
         match dev.target {
-            Target::Display => Self::display(dev),
+            Target::Display => Self::display(dev, hdr),
             Target::Offscreen { width, height } => Self::offscreen(dev, width, height),
         }
     }
 
-    fn display(dev: &GpuDevice) -> Result<Self> {
+    fn display(dev: &GpuDevice, hdr: bool) -> Result<Self> {
         let display_i = ash::khr::display::Instance::new(&dev.entry, &dev.instance);
         // SAFETY: read-only queries on a live physical device.
         let displays = unsafe { display_i.get_physical_device_display_properties(dev.pdev) }?;
@@ -109,14 +115,19 @@ impl Output {
         }
         // SAFETY: as above.
         let formats = unsafe { surface_i.get_physical_device_surface_formats(dev.pdev, surface) }?;
+        let (want, space) = if hdr {
+            (FORMAT_HDR10, vk::ColorSpaceKHR::HDR10_ST2084_EXT)
+        } else {
+            (FORMAT, vk::ColorSpaceKHR::SRGB_NONLINEAR)
+        };
         let format = formats
             .iter()
-            .find(|f| f.format == FORMAT)
-            .ok_or_else(|| anyhow!("the display surface offers no {FORMAT:?}: {formats:?}"))?;
+            .find(|f| f.format == want && f.color_space == space)
+            .ok_or_else(|| anyhow!("the display surface offers no {want:?} in {space:?}: {formats:?}"))?;
         let ci = vk::SwapchainCreateInfoKHR::default()
             .surface(surface)
             .min_image_count(count)
-            .image_format(FORMAT)
+            .image_format(want)
             .image_color_space(format.color_space)
             .image_extent(extent)
             .image_array_layers(1)
@@ -130,13 +141,14 @@ impl Output {
         let swapchain = unsafe { swap_d.create_swapchain(&ci, None) }.context("display swapchain")?;
         // SAFETY: the swapchain is live; its images belong to it.
         let images = unsafe { swap_d.get_swapchain_images(swapchain) }?;
-        let views = views(dev, &images)?;
+        let views = views(dev, &images, want)?;
         tracing::info!(
-            "swapchain {}x{} @ {} mHz, {} images, FIFO",
+            "swapchain {}x{} @ {} mHz, {} images, FIFO, {}",
             extent.width,
             extent.height,
             mode.parameters.refresh_rate,
-            images.len()
+            images.len(),
+            if hdr { "HDR10" } else { "SDR" }
         );
         Ok(Self {
             kind: Kind::Swapchain {
@@ -147,6 +159,8 @@ impl Output {
             },
             extent,
             refresh_mhz: mode.parameters.refresh_rate,
+            hdr,
+            format: want,
             images,
             views,
             final_layout: vk::ImageLayout::PRESENT_SRC_KHR,
@@ -168,11 +182,13 @@ impl Output {
             images.push(image);
             memory.push(mem);
         }
-        let views = views(dev, &images)?;
+        let views = views(dev, &images, FORMAT)?;
         Ok(Self {
             kind: Kind::Offscreen { memory, next: 0 },
             extent,
             refresh_mhz: 60_000,
+            hdr: false,
+            format: FORMAT,
             images,
             views,
             final_layout: vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
@@ -253,9 +269,9 @@ impl Output {
     }
 }
 
-fn views(dev: &GpuDevice, images: &[vk::Image]) -> Result<Vec<vk::ImageView>> {
+fn views(dev: &GpuDevice, images: &[vk::Image], format: vk::Format) -> Result<Vec<vk::ImageView>> {
     images
         .iter()
-        .map(|&image| crate::util::view(dev, image, FORMAT))
+        .map(|&image| crate::util::view(dev, image, format))
         .collect()
 }

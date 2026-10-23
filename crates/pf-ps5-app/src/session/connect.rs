@@ -182,13 +182,16 @@ impl Negotiated {
         } else {
             codecs.first().copied().unwrap_or_default()
         };
-        // 10-bit only rides HEVC; PyroWave carries its own depth in its profile.
-        let ten_bit = params.ten_bit_sdr && caps.ten_bit && caps.hevc && codec_pref != CodecPref::H264;
+        // 10-bit rides HEVC or PyroWave, never H.264. HDR is BT.2020 PQ and needs 10-bit.
+        let hdr = params.hdr_enabled && caps.hdr && caps.ten_bit && codec_pref != CodecPref::H264;
+        let ten_bit = hdr || (params.ten_bit_sdr && caps.ten_bit && caps.hevc && codec_pref != CodecPref::H264);
         Self {
             audio_channels,
             // Multi-slice: Videodec2 spreads a picture's slices across its cores; one slice
             // serializes it. The host slices only toward this bit; `dial` names the count.
-            video_caps: quic::VIDEO_CAP_MULTI_SLICE | if ten_bit { quic::VIDEO_CAP_10BIT } else { 0 },
+            video_caps: quic::VIDEO_CAP_MULTI_SLICE
+                | if ten_bit { quic::VIDEO_CAP_10BIT } else { 0 }
+                | if hdr { quic::VIDEO_CAP_HDR } else { 0 },
             // Folded from the one codec list so the host's ladder never picks an undecodable lane.
             video_codecs: codecs.iter().fold(0, |set, &pref| set | codec_bit(pref)),
             preferred_codec: codec_bit(codec_pref),

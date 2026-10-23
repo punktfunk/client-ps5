@@ -12,9 +12,9 @@ pub struct VideoCaps {
     pub pyrowave: bool,
     pub h264: bool,
     pub hevc: bool,
-    /// Main10 HEVC decodes and presents (as SDR until HDR scan-out exists).
+    /// Main10 HEVC decodes and presents.
     pub ten_bit: bool,
-    /// HDR10 scan-out. Off until the swapchain offers a PQ format.
+    /// PQ streams scan out as HDR10; without it they are tonemapped to SDR.
     pub hdr: bool,
     /// Widest layout the audio output plays.
     pub max_channels: u8,
@@ -27,7 +27,7 @@ impl VideoCaps {
         h264: true,
         hevc: true,
         ten_bit: true,
-        hdr: false,
+        hdr: true,
         max_channels: 2,
     };
 

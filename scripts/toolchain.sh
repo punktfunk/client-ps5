@@ -17,6 +17,7 @@ fetch() {
         git clone --quiet --filter=blob:none "$repo" "$dir"
     fi
     if [[ $(git -C "$dir" rev-parse HEAD) != "$rev" ]]; then
+        git -C "$dir" remote set-url origin "$repo"
         git -C "$dir" fetch --quiet origin "$rev" || git -C "$dir" fetch --quiet origin
         git -C "$dir" checkout --quiet --detach "$rev"
     fi

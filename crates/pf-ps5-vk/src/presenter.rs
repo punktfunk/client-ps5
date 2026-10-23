@@ -15,7 +15,7 @@ use pf_client_video::video_color::csc_rows;
 use pf_ps5_app::platform::{Display, Fit, FrameReport, Refresh, Rgba};
 
 use crate::device::GpuDevice;
-use crate::output::{Output, FORMAT};
+use crate::output::Output;
 use crate::picture::{Picture, Planes, VideoSlot};
 use crate::pipelines::Pipelines;
 use crate::ui::{UiLayer, FRAMES};
@@ -63,6 +63,8 @@ pub struct Presenter {
     last_present: Option<Instant>,
     readback: Option<Readback>,
     readback_sets: [vk::DescriptorSet; 3],
+    /// The display refused an HDR10 output once; PQ is tonemapped from then on.
+    hdr_refused: bool,
 }
 
 // SAFETY: the read-back pointer maps memory this struct owns; the presenter lives on the main
@@ -72,8 +74,8 @@ unsafe impl Send for Presenter {}
 impl Presenter {
     /// Builds the output, pipelines and UI layer on `dev`. `slot` is shared with the lanes.
     pub fn new(dev: Arc<GpuDevice>, slot: Arc<VideoSlot>) -> Result<Self> {
-        let output = Output::new(&dev)?;
-        let pipes = Pipelines::new(&dev, FORMAT, output.final_layout)?;
+        let output = Output::new(&dev, false)?;
+        let pipes = Pipelines::new(&dev, output.format, output.hdr, output.final_layout)?;
         let framebuffers = output
             .views
             .iter()
@@ -104,22 +106,6 @@ impl Presenter {
                 None,
             )
         }?;
-        let layouts = [
-            pipes.planar.set_layout,
-            pipes.two_plane.set_layout,
-            pipes.overlay.set_layout,
-        ];
-        let alloc_sets = || -> Result<[vk::DescriptorSet; 3]> {
-            // SAFETY: the pool and layouts are live; the sets are freed with the pool.
-            let sets = unsafe {
-                dev.device.allocate_descriptor_sets(
-                    &vk::DescriptorSetAllocateInfo::default()
-                        .descriptor_pool(desc_pool)
-                        .set_layouts(&layouts),
-                )
-            }?;
-            Ok([sets[0], sets[1], sets[2]])
-        };
         // SAFETY: the pool is live; the buffers are freed with it.
         let cmds = unsafe {
             dev.device.allocate_command_buffers(
@@ -141,11 +127,11 @@ impl Presenter {
                     )
                 }?,
                 ready: semaphore(&dev)?,
-                sets: alloc_sets()?,
+                sets: alloc_sets(&dev, desc_pool, &pipes)?,
                 in_use: None,
             });
         }
-        let readback_sets = alloc_sets()?;
+        let readback_sets = alloc_sets(&dev, desc_pool, &pipes)?;
         let ui = UiLayer::new(&dev, output.extent)?;
         // The presenter runs on the main thread, decode on the pump: take present turns so a
         // picture handed over is presented ahead of the next decode on the shared queue.
@@ -168,7 +154,56 @@ impl Presenter {
             last_present: None,
             readback: None,
             readback_sets,
+            hdr_refused: false,
         })
+    }
+
+    /// Swaps the output for an HDR10 (`hdr`) or SDR one, and everything drawn against its format.
+    /// An HDR10 output the display refuses falls back to SDR and isn't asked for again.
+    fn rebuild(&mut self, hdr: bool) -> Result<()> {
+        self.wait_idle();
+        let dev = self.dev.clone();
+        // SAFETY: the device is idle; every handle below was created by this presenter and is
+        // replaced before it is used again.
+        unsafe {
+            if let Some(rb) = self.readback.take() {
+                destroy_readback(&dev, &rb);
+            }
+            for fb in self.framebuffers.drain(..) {
+                dev.device.destroy_framebuffer(fb, None);
+            }
+            self.pipes.destroy(&dev);
+            self.output.destroy(&dev);
+        }
+        self.output = match Output::new(&dev, hdr) {
+            Ok(output) => output,
+            Err(e) if hdr => {
+                tracing::warn!("presenter: no HDR10 output ({e:#}); tonemapping PQ to SDR");
+                self.hdr_refused = true;
+                Output::new(&dev, false)?
+            }
+            Err(e) => return Err(e),
+        };
+        self.pipes = Pipelines::new(&dev, self.output.format, self.output.hdr, self.output.final_layout)?;
+        self.framebuffers = self
+            .output
+            .views
+            .iter()
+            .map(|&view| framebuffer(&dev, self.pipes.pass_out, view, self.output.extent))
+            .collect::<Result<Vec<_>>>()?;
+        while self.done.len() < self.output.images.len() {
+            self.done.push(semaphore(&dev)?);
+        }
+        // SAFETY: the device is idle, so no set from this pool is in use.
+        unsafe {
+            dev.device
+                .reset_descriptor_pool(self.desc_pool, vk::DescriptorPoolResetFlags::empty())
+        }?;
+        for f in 0..self.frames.len() {
+            self.frames[f].sets = alloc_sets(&dev, self.desc_pool, &self.pipes)?;
+        }
+        self.readback_sets = alloc_sets(&dev, self.desc_pool, &self.pipes)?;
+        Ok(())
     }
 
     pub fn device(&self) -> &Arc<GpuDevice> {
@@ -254,7 +289,7 @@ impl Presenter {
                 }
                 let mut pc = [0f32; 16];
                 pc[..12].copy_from_slice(rows.as_flattened());
-                pc[12] = if picture.color.is_pq() { 1.0 } else { 0.0 };
+                pc[12] = if picture.color.is_pq() && !self.output.hdr { 1.0 } else { 0.0 };
                 pc[13] = TONEMAP_PEAK;
                 pc[14] = picture.uv_scale[0];
                 pc[15] = picture.uv_scale[1];
@@ -329,14 +364,15 @@ impl Presenter {
             return Ok(());
         }
         let extent = self.output.extent;
+        let format = self.output.format;
         let (image, memory) = crate::util::image(
             &self.dev,
             extent,
-            FORMAT,
+            format,
             vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
         )?;
-        let view = crate::util::view(&self.dev, image, FORMAT)?;
+        let view = crate::util::view(&self.dev, image, format)?;
         let framebuffer = framebuffer(&self.dev, self.pipes.pass_read, view, extent)?;
         let bytes = u64::from(extent.width) * u64::from(extent.height) * 4;
         let (buffer, buffer_memory, ptr) =
@@ -396,6 +432,12 @@ impl Display for Presenter {
                 report.decode_to_present_us = u32::try_from(picture.decoded_at.elapsed().as_micros()).ok();
                 self.current = Some(picture);
             }
+        }
+        let want_hdr = !self.hdr_refused
+            && self.stream.is_some()
+            && self.current.as_ref().is_some_and(|p| p.color.is_pq());
+        if want_hdr != self.output.hdr && self.output.presents() {
+            self.rebuild(want_hdr)?;
         }
         self.frames[f].in_use = self.current.clone();
 
@@ -470,6 +512,10 @@ impl Display for Presenter {
     }
 
     fn read_back(&mut self) -> Result<Option<Rgba>> {
+        // The capture is 8-bit sRGB; an HDR10 composition has no such pixels to give.
+        if self.output.hdr {
+            return Ok(None);
+        }
         self.ensure_readback()?;
         self.wait_idle();
         let rb = self.readback.as_ref().expect("just ensured");
@@ -554,12 +600,7 @@ impl Drop for Presenter {
         // SAFETY: the device is idle and every handle below was created by this presenter.
         unsafe {
             if let Some(rb) = self.readback.take() {
-                dev.device.destroy_framebuffer(rb.framebuffer, None);
-                dev.device.destroy_image_view(rb.view, None);
-                dev.device.destroy_image(rb.image, None);
-                dev.device.free_memory(rb.memory, None);
-                dev.device.destroy_buffer(rb.buffer, None);
-                dev.device.free_memory(rb.buffer_memory, None);
+                destroy_readback(dev, &rb);
             }
             self.ui.destroy(dev);
             for fr in self.frames.drain(..) {
@@ -578,6 +619,38 @@ impl Drop for Presenter {
             self.output.destroy(dev);
         }
     }
+}
+
+/// # Safety
+/// The device is idle and `rb` was built on it; nothing uses `rb` afterwards.
+unsafe fn destroy_readback(dev: &GpuDevice, rb: &Readback) {
+    // SAFETY: forwarded from the caller.
+    unsafe {
+        dev.device.destroy_framebuffer(rb.framebuffer, None);
+        dev.device.destroy_image_view(rb.view, None);
+        dev.device.destroy_image(rb.image, None);
+        dev.device.free_memory(rb.memory, None);
+        dev.device.destroy_buffer(rb.buffer, None);
+        dev.device.free_memory(rb.buffer_memory, None);
+    }
+}
+
+/// One planar, one two-plane and one overlay set from `pool`, freed with it.
+fn alloc_sets(dev: &GpuDevice, pool: vk::DescriptorPool, pipes: &Pipelines) -> Result<[vk::DescriptorSet; 3]> {
+    let layouts = [
+        pipes.planar.set_layout,
+        pipes.two_plane.set_layout,
+        pipes.overlay.set_layout,
+    ];
+    // SAFETY: the pool and layouts are live; the sets are freed with the pool.
+    let sets = unsafe {
+        dev.device.allocate_descriptor_sets(
+            &vk::DescriptorSetAllocateInfo::default()
+                .descriptor_pool(pool)
+                .set_layouts(&layouts),
+        )
+    }?;
+    Ok([sets[0], sets[1], sets[2]])
 }
 
 fn semaphore(dev: &GpuDevice) -> Result<vk::Semaphore> {
