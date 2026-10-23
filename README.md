@@ -8,12 +8,13 @@ host to a PS5.
 ## What it is built to do
 
 - 3840×2160 at 59.94 or 119.88 Hz: H.264 and HEVC on the console's decoder, PyroWave on its GPU.
+- HDR10 when the host sends HDR.
 - The punktfunk console UI: hosts, pairing, game libraries and settings, driven by the controller.
 - DualSense rumble, adaptive triggers and light bar, one controller per signed-in user.
 - Stereo sound.
 
-Not yet: HDR, surround sound, DualSense haptics, keyboard and mouse, VRR, and host names (enter
-an IP address).
+Not yet: surround sound, DualSense haptics, keyboard and mouse, VRR, and host names (enter an IP
+address).
 
 ## Test it on a console
 
