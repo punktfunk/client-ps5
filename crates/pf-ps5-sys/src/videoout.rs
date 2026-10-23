@@ -32,7 +32,13 @@ extern "C" {
     fn sceVideoOutOpen(user: i32, bus: i32, index: i32, param: *const c_void) -> i32;
     fn sceVideoOutClose(handle: i32) -> i32;
     fn sceVideoOutSetFlipRate(handle: i32, rate: i32) -> i32;
-    fn sceVideoOutConfigureOutput(handle: i32, request: u32, a: *const c_void, b: *const c_void, c: *const c_void) -> i32;
+    fn sceVideoOutConfigureOutput(
+        handle: i32,
+        request: u32,
+        a: *const c_void,
+        b: *const c_void,
+        c: *const c_void,
+    ) -> i32;
     fn sceVideoOutSetBufferAttribute2(
         attr: *mut c_void,
         format: u64,
@@ -66,10 +72,26 @@ pub struct Phase {
 
 /// Red 1000 nits (shows the channel order), grey 203 (SDR white), white 1000, PQ full scale.
 pub const PHASES: [Phase; 4] = [
-    Phase { name: "red 1000 nits", rgb: [769, 0, 0], seconds: 8 },
-    Phase { name: "grey 203 nits", rgb: [592, 592, 592], seconds: 8 },
-    Phase { name: "white 1000 nits", rgb: [769, 769, 769], seconds: 8 },
-    Phase { name: "white pq 1023", rgb: [1023, 1023, 1023], seconds: 8 },
+    Phase {
+        name: "red 1000 nits",
+        rgb: [769, 0, 0],
+        seconds: 8,
+    },
+    Phase {
+        name: "grey 203 nits",
+        rgb: [592, 592, 592],
+        seconds: 8,
+    },
+    Phase {
+        name: "white 1000 nits",
+        rgb: [769, 769, 769],
+        seconds: 8,
+    },
+    Phase {
+        name: "white pq 1023",
+        rgb: [1023, 1023, 1023],
+        seconds: 8,
+    },
 ];
 
 fn fill(buffer: &mut [u32], [r, g, b]: [u32; 3]) {
@@ -103,7 +125,14 @@ fn flip_phases(handle: i32, log: &mut dyn FnMut(String)) -> Result<(), i32> {
     let mut phys = -1_i64;
     // SAFETY: the out-pointer is a live i64; the range is the whole direct-memory space.
     let rc = unsafe {
-        kernel::sceKernelAllocateDirectMemory(0, kernel::sceKernelGetDirectMemorySize(), bytes, ALIGN, DIRECT_TYPE_CPU, &mut phys)
+        kernel::sceKernelAllocateDirectMemory(
+            0,
+            kernel::sceKernelGetDirectMemorySize(),
+            bytes,
+            ALIGN,
+            DIRECT_TYPE_CPU,
+            &mut phys,
+        )
     };
     log(format!("alloc {bytes} bytes -> {rc:#010x}"));
     if rc != 0 {
@@ -119,26 +148,50 @@ fn flip_phases(handle: i32, log: &mut dyn FnMut(String)) -> Result<(), i32> {
     // SAFETY: the mapping is `bytes` long, writable, 2 MiB aligned, and nothing else refers to it.
     let words = unsafe { core::slice::from_raw_parts_mut(address.cast::<u32>(), bytes / 4) };
     // SAFETY: a plain setter on a live handle.
-    log(format!("flip rate -> {:#010x}", unsafe { sceVideoOutSetFlipRate(handle, 0) }));
+    log(format!("flip rate -> {:#010x}", unsafe {
+        sceVideoOutSetFlipRate(handle, 0)
+    }));
     let null_c = core::ptr::null();
     // SAFETY: the default output request takes no parameter blocks.
     let rc = unsafe { sceVideoOutConfigureOutput(handle, REQUEST_DEFAULT, null_c, null_c, null_c) };
     log(format!("configure output -> {rc:#010x}"));
     let base = address.cast::<u8>();
     let null = core::ptr::null_mut();
-    // SAFETY: both pointers are inside the mapping, one buffer apart.
-    let mut buffers = [0, 1].map(|i| Buffer { data: unsafe { base.add(i * BUFFER_BYTES) }.cast(), metadata: null, reserved: [null; 2] });
+    let mut buffers = [0, 1].map(|i| Buffer {
+        // SAFETY: both pointers are inside the mapping, one buffer apart.
+        data: unsafe { base.add(i * BUFFER_BYTES) }.cast(),
+        metadata: null,
+        reserved: [null; 2],
+    });
     let mut attr = [0_u8; 80];
     // SAFETY: `attr` is the 80-byte attribute block the call fills; `buffers` outlives the registration.
     let rc = unsafe {
-        sceVideoOutSetBufferAttribute2(attr.as_mut_ptr().cast(), FORMAT_HDR10, TILING_64KB_R_X, WIDTH, HEIGHT, 0, 0, 0);
+        sceVideoOutSetBufferAttribute2(
+            attr.as_mut_ptr().cast(),
+            FORMAT_HDR10,
+            TILING_64KB_R_X,
+            WIDTH,
+            HEIGHT,
+            0,
+            0,
+            0,
+        );
         sceVideoOutRegisterBuffers2(handle, 0, 0, buffers.as_mut_ptr(), 2, attr.as_mut_ptr().cast(), 0, null)
     };
     log(format!("register hdr10 {WIDTH}x{HEIGHT} -> {rc:#010x}"));
     if rc != 0 {
         // SAFETY: as above, with the SDR format: tells a refused format from a refused buffer.
         let sdr = unsafe {
-            sceVideoOutSetBufferAttribute2(attr.as_mut_ptr().cast(), FORMAT_SDR, TILING_64KB_R_X, WIDTH, HEIGHT, 0, 0, 0);
+            sceVideoOutSetBufferAttribute2(
+                attr.as_mut_ptr().cast(),
+                FORMAT_SDR,
+                TILING_64KB_R_X,
+                WIDTH,
+                HEIGHT,
+                0,
+                0,
+                0,
+            );
             sceVideoOutRegisterBuffers2(handle, 0, 0, buffers.as_mut_ptr(), 2, attr.as_mut_ptr().cast(), 0, null)
         };
         log(format!("register sdr {WIDTH}x{HEIGHT} -> {sdr:#010x}"));
@@ -148,7 +201,10 @@ fn flip_phases(handle: i32, log: &mut dyn FnMut(String)) -> Result<(), i32> {
     for (n, phase) in PHASES.iter().enumerate() {
         fill(words, phase.rgb);
         log(format!("phase {n} {} for {} s", phase.name, phase.seconds));
-        let (mut failed, end) = (0_u32, std::time::Instant::now() + std::time::Duration::from_secs(phase.seconds));
+        let (mut failed, end) = (
+            0_u32,
+            std::time::Instant::now() + std::time::Duration::from_secs(phase.seconds),
+        );
         while std::time::Instant::now() < end {
             // SAFETY: buffer indices 0 and 1 are the two registered above.
             let rc = unsafe { sceVideoOutSubmitFlip(handle, (flip & 1) as i32, FLIP_VSYNC, flip) };

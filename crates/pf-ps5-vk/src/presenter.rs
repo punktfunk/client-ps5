@@ -289,7 +289,11 @@ impl Presenter {
                 }
                 let mut pc = [0f32; 16];
                 pc[..12].copy_from_slice(rows.as_flattened());
-                pc[12] = if picture.color.is_pq() && !self.output.hdr { 1.0 } else { 0.0 };
+                pc[12] = if picture.color.is_pq() && !self.output.hdr {
+                    1.0
+                } else {
+                    0.0
+                };
                 pc[13] = TONEMAP_PEAK;
                 pc[14] = picture.uv_scale[0];
                 pc[15] = picture.uv_scale[1];
@@ -433,9 +437,8 @@ impl Display for Presenter {
                 self.current = Some(picture);
             }
         }
-        let want_hdr = !self.hdr_refused
-            && self.stream.is_some()
-            && self.current.as_ref().is_some_and(|p| p.color.is_pq());
+        let want_hdr =
+            !self.hdr_refused && self.stream.is_some() && self.current.as_ref().is_some_and(|p| p.color.is_pq());
         if want_hdr != self.output.hdr && self.output.presents() {
             self.rebuild(want_hdr)?;
         }
