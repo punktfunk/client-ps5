@@ -96,6 +96,7 @@ const CHECKS: &[(&str, Check)] = &[
     ("quic-tls", quic_tls),
     ("mdns", mdns),
     ("session", session),
+    ("hdr-scanout", hdr_scanout),
 ];
 
 /// Runs every check in order. Returns how many failed.
@@ -258,6 +259,24 @@ fn affinity(_: &Ctx) -> Result<Outcome> {
 #[cfg(not(target_vendor = "sie"))]
 fn affinity(_: &Ctx) -> Result<Outcome> {
     Ok(Outcome::Skip("CPU masks are the console's".into()))
+}
+
+/// `VideoOut` takes buffers in the HDR10 pixel format and flips them: four solid PQ fills, 8 s each,
+/// on the display (the TV's HDR indicator and the picture are the other half of the result).
+#[cfg(target_vendor = "sie")]
+fn hdr_scanout(_: &Ctx) -> Result<Outcome> {
+    let mut steps = Vec::new();
+    let result = pf_ps5_sys::videoout::hdr_scanout_probe(&mut |line| steps.push(line));
+    let steps = steps.join("; ");
+    match result {
+        Ok(()) => ok(steps),
+        Err(code) => bail!("{code:#010x}: {steps}"),
+    }
+}
+
+#[cfg(not(target_vendor = "sie"))]
+fn hdr_scanout(_: &Ctx) -> Result<Outcome> {
+    Ok(Outcome::Skip("VideoOut is the console's".into()))
 }
 
 fn files(ctx: &Ctx) -> Result<Outcome> {

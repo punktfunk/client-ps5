@@ -484,10 +484,13 @@ pub(super) fn audio_pump(client: &NativeClient, stage: &mut AudioStage, stop: &A
         // ~15s, matching the video heartbeat (packets are 5ms each).
         if packets % 3_000 == 0 {
             tracing::debug!(
-                "audio: {what}, depth={}, peak={:.4}",
+                "audio: {what}, depth={}, underruns={}, peak={:.4}",
                 stage
                     .depth_ms()
                     .map_or_else(|| "n/a".to_string(), |ms| format!("{ms}ms")),
+                stage
+                    .underruns()
+                    .map_or_else(|| "n/a".to_string(), |count| count.to_string()),
                 stage.peak(),
             );
         }

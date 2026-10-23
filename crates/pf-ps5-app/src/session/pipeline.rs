@@ -172,7 +172,7 @@ fn spawn_video_thread(
         report_decode_latency: client.wants_decode_latency(),
         present_priority,
     };
-    // HDR scan-out does not exist yet, so host mastering metadata has nowhere to go.
+    // VideoOut takes no mastering metadata, so the host's has nowhere to go.
     let is_hdr = false;
     let (client, stop, stats) = (client.clone(), stop.clone(), stats.clone());
     std::thread::Builder::new()

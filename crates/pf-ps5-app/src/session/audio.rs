@@ -114,6 +114,11 @@ impl AudioStage {
         self.sink.depth_ms()
     }
 
+    /// Output-grain underruns, when the sink can report them.
+    pub fn underruns(&self) -> Option<u64> {
+        self.sink.underruns()
+    }
+
     /// Peak sample of the last decoded frame: tells "the host sends silence" from "no sound".
     pub fn peak(&self) -> f32 {
         self.pcm[..self.last].iter().fold(0f32, |m, &s| m.max(s.abs()))

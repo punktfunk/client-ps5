@@ -30,14 +30,16 @@ pub struct Pipelines {
 }
 
 impl Pipelines {
-    pub fn new(dev: &GpuDevice, format: vk::Format, out_layout: vk::ImageLayout) -> Result<Self> {
+    /// On an HDR10 `format` (`hdr`) the UI layer's sRGB is re-encoded as PQ at 203-nit white.
+    pub fn new(dev: &GpuDevice, format: vk::Format, hdr: bool, out_layout: vk::ImageLayout) -> Result<Self> {
         let sampler = crate::util::sampler(dev)?;
         let pass_out = render_pass(dev, format, out_layout)?;
         let pass_read = render_pass(dev, format, vk::ImageLayout::TRANSFER_SRC_OPTIMAL)?;
+        let overlay = if hdr { spv::OVERLAY_PQ_FRAG } else { spv::OVERLAY_FRAG };
         Ok(Self {
             planar: pipe(dev, pass_out, sampler, 3, true, spv::PLANAR_CSC_FRAG, false)?,
             two_plane: pipe(dev, pass_out, sampler, 2, true, spv::NV12_CSC_FRAG, false)?,
-            overlay: pipe(dev, pass_out, sampler, 1, false, spv::OVERLAY_FRAG, true)?,
+            overlay: pipe(dev, pass_out, sampler, 1, false, overlay, true)?,
             pass_out,
             pass_read,
             sampler,

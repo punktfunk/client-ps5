@@ -141,4 +141,9 @@ pub trait AudioSink: Send + Sync {
     fn depth_ms(&self) -> Option<i64> {
         None
     }
+
+    /// Number of output grains that had to be padded because the queue ran short.
+    fn underruns(&self) -> Option<u64> {
+        None
+    }
 }

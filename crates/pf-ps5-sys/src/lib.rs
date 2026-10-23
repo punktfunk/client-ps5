@@ -18,6 +18,8 @@ pub mod sysmodule;
 pub mod system;
 pub mod user;
 pub mod videodec2;
+#[cfg(target_vendor = "sie")]
+pub mod videoout;
 pub mod vk;
 
 /// An SCE error code as the operator log line spells it.
