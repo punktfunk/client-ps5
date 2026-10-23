@@ -15,9 +15,15 @@ use punktfunk_core::audio::{crossfade_drop, crossfade_insert, JitterPolicy, Jitt
 use crate::core::media::{AudioFormat, AudioSink, Samples};
 use crate::platform::AudioPort;
 
-/// No rate matching under `AudioOut`, so the WASAPI figures fit until a bundle's underrun counts
-/// say otherwise.
-const TUNING: JitterTuning = JitterTuning::WASAPI;
+/// AudioOut consumes 256-frame grains (5.33 ms at 48 kHz). Keep only the minimum extra packet
+/// margin the shared policy requires, then grow adaptively if this link actually underruns.
+const TUNING: JitterTuning = JitterTuning {
+    base_target_ms: 0,
+    max_target_ms: 40,
+    headroom_ms: 15,
+    hard_cap_ms: 100,
+    deprime_ms: 25,
+};
 
 fn playout(channels: u8) -> punktfunk_core::audio::AudioPlayout {
     punktfunk_core::audio::AudioPlayout {
@@ -123,6 +129,10 @@ impl AudioSink for AudioOutSink {
         Some(i64::from(
             self.shared.ring.lock().expect("audio ring poisoned").depth_ms,
         ))
+    }
+
+    fn underruns(&self) -> Option<u64> {
+        Some(self.shared.underruns.load(Ordering::Relaxed))
     }
 }
 
