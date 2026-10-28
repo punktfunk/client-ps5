@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="packaging/icon_large.png" alt="punktfunk" width="130">
+<img src="packaging/icon_large.png" alt="Punktfunk" width="130">
 
 <br>
 <br>
@@ -8,13 +8,13 @@
 [![CI](https://github.com/punktfunk/client-ps5/actions/workflows/ci.yml/badge.svg)](https://github.com/punktfunk/client-ps5/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-d2c9fb)](#licence)
 
-**Native PlayStation 5 client for [punktfunk](https://git.unom.io/unom/punktfunk) — low-latency desktop & game streaming.**
+**Native PlayStation 5 client for [Punktfunk](https://git.unom.io/unom/punktfunk) — low-latency desktop & game streaming.**
 
 </div>
 
 ---
 
-A homebrew title that streams games and desktops from a [punktfunk](https://docs.punktfunk.unom.io)
+A homebrew title that streams games and desktops from a [Punktfunk](https://docs.punktfunk.unom.io)
 host to a PS5, built on the upstream `punktfunk-core` crate (a pinned git dependency — see
 `Cargo.toml`) and the shared console UI. This repo is only the PS5-specific client: the console's
 platform, Videodec2, a Vulkan presenter on a statically linked RADV, and the title packaging.
@@ -28,7 +28,7 @@ What it is built to do:
 
 - 3840×2160 at 59.94 or 119.88 Hz: H.264 and HEVC on the console's decoder, PyroWave on its GPU.
 - HDR10 when the display shows HDR and the host sends it.
-- The punktfunk console UI: hosts, pairing, game libraries and settings, driven by the controller.
+- The Punktfunk console UI: hosts, pairing, game libraries and settings, driven by the controller.
 - DualSense rumble, adaptive triggers and light bar, one controller per signed-in user.
 - Stereo sound.
 
