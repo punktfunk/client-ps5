@@ -456,7 +456,8 @@ fn test_run_step(
                     tracing::warn!("test run: {e:#}");
                 }
             }
-            Ok(None) | Err(_) => tracing::warn!("test run: no read-back at {second}s"),
+            Ok(None) => tracing::info!("test run: no read-back at {second}s — this output has no 8-bit pixels"),
+            Err(e) => tracing::warn!("test run: read-back at {second}s: {e:#}"),
         }
     }
     if after < Duration::from_secs(run.seconds) {
