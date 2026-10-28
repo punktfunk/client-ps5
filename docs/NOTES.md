@@ -14,7 +14,7 @@ id or probe log; the rest is **sourced, not proven**.
 | 3 | stage/timeline/pump (lifted), Videodec2 lane, PyroWave lane | stage tests incl. intra-only anchors | Videodec2 decode, the import step taken, 4K120 budgets |
 | 4 | stream loop, input thread, dial, chord, rumble/light/triggers, AudioOut, reconnect | pad routing, trigger translation, audio ring | input feel, triggers, audio drift |
 
-Not built yet: anything in plan §9 (HDR, surround, haptics, keyboard/mouse, VRR), system-event
+Not built yet: the rest of plan §9 (surround, haptics, keyboard/mouse, VRR), system-event
 polling (layout unproven, below), a hostname resolver (addresses only).
 
 ## Deviations from the plan, and why
@@ -39,7 +39,7 @@ polling (layout unproven, below), a hostname resolver (addresses only).
 
 ## Upstream changes (plan §7)
 
-Merged into monorepo main (#1966–#1968); `Cargo.toml` pins `770504dbc`, which carries all three:
+Merged into monorepo main (#1966–#1968); every punktfunk pin from `770504dbc` on carries all three:
 
 - #1966: `Platform::Ps5` and its rows; `shortcuts::Client::Ps5`.
 - #1967: `pf-client-core` (portable half, discovery) and `pf-console-ui` build for
@@ -112,6 +112,23 @@ Same console and host, branch `fix/console-round-3`. Evidence: probe logs
 - **PyroWave** at 4K120 tops out at ~790 Mbit/s on the wire (~637 of video): core paces at its
   800 Mbit/s link floor, because this console's port facts are unknown to core.
 
+## Proven on the console (round 7, 2026-10-23)
+
+Same console, an HDR TV, a Windows host; build `2ec950e` with Mesa `c90ea0aab`. Evidence:
+bundles `PPSA99724/1792798151` (HEVC HDR, 4K60, 70 s) and `PPSA99724/1792803716` (PyroWave
+HDR, 4K120, 40 s, over Wi-Fi), with the host logs and the tester's report.
+
+- **119.88 Hz:** both sessions open a `3840x2160 @ 119880 mHz` HDR10 swapchain, within 25 ms of
+  the first picture. Title start to swapchain is 3.2-3.8 s, of which ~2.9 s is the host sending
+  nothing while its virtual display and encoder come up.
+- **HEVC HDR10:** Main10 PQ at 4K60 decodes in 9.48 ms mean, 15.3 ms max, with no decoder
+  errors and no flushes.
+- **Console HDR Off on an HDR TV:** Mesa still opens and flips the HDR10 swapchain; the TV shows
+  no HDR badge.
+- **AudioOut under a full link:** PyroWave at a fixed 611 Mbit/s over Wi-Fi (Automatic bitrate
+  off) logged 25 underruns in 40 s while the ring grew to 65 ms, 24 of them in the first 15 s.
+  The HEVC run at ~50 Mbit/s logged none.
+
 ## Console facts the code relies on (sourced, not yet proven)
 
 Sources: ProsperoLight (PL), PS5_Vulkan (VK), PS5_VulkanTemplate (TPL), the payload SDK (SDK),
@@ -135,9 +152,11 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
   switches the swapchain to HDR10 on its first picture, 8941 pictures in 90 s, and the TV shows
   the desktop in HDR at its usual colours (bundle 1792728081). An HDR game's in-game calibration
   reads correct through it (Kris, 2026-10-23, by eye); 300 s of play, 25165 pictures, decode to
-  present p50 4.1 ms, none dropped (bundle 1792728541). The TV reports 120 Hz and about 120 flips
-  land a second, but the swapchain reports 59.94 Hz: the console turns the 119.88 request into
-  VRR, and the WSI's refresh check then sees a 60 Hz period.
+  present p50 4.1 ms, none dropped (bundle 1792728541).
+- **Display HDR:** `sceVideoOutGetDeviceCapabilityInfo_` (NID `kGVLc3htQE8`) fills one `u64`
+  whose `0x80` bit is BT.2020 PQ (shadPS4 `video_out.h`, where the bit needs the display's HDR
+  and the title's HDR attribute). Whether the console's HDR setting clears it is what probe
+  `display-hdr` answers; the client asks for HDR only with the bit set, or when the call fails.
 - **Videodec2:** title process only (payload contexts fail), `sceSysmoduleLoadModule(207)` first,
   memory type 12 in 16 KiB pages, a DPB at least the stream's references plus one (a six-deep
   one failed every picture `811d0302` against Intel VAAPI's nine references at 1440p; sized from
