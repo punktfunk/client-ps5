@@ -14,7 +14,8 @@ pub struct VideoCaps {
     pub hevc: bool,
     /// Main10 HEVC decodes and presents.
     pub ten_bit: bool,
-    /// PQ streams scan out as HDR10; without it they are tonemapped to SDR.
+    /// The display shows HDR10, so a session asks for PQ and scans it out as HDR10. Off on a
+    /// display that reports no BT.2020 PQ; a session then asks for SDR.
     pub hdr: bool,
     /// Widest layout the audio output plays.
     pub max_channels: u8,
@@ -57,6 +58,8 @@ static INSTALLED: OnceLock<VideoCaps> = OnceLock::new();
 pub fn install(caps: VideoCaps) {
     if INSTALLED.set(caps).is_err() {
         tracing::warn!("video caps already installed — ignoring {caps:?}");
+    } else {
+        tracing::info!("video caps: {caps:?}");
     }
 }
 

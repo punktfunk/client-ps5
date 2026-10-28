@@ -35,7 +35,8 @@ pub trait Ps5Settings {
     fn set_gamepad_type(&mut self, kind: GamepadType);
     /// Normalise to what this console can present (`core::caps`). Called on load and on every
     /// launch's resolved settings, so a profile override cannot put an unpresentable pick on
-    /// the wire.
+    /// the wire. HDR stays as the player set it: the display can change between launches, and
+    /// `session::connect` asks for HDR only when the caps carry it.
     fn clamp_to_caps(&mut self);
 }
 
@@ -67,10 +68,6 @@ impl Ps5Settings for Settings {
                 tracing::info!("settings: {codec:?} isn't decodable here — using {first:?}");
                 self.set_codec_pref(first);
             }
-        }
-        if self.hdr_enabled && !caps.hdr {
-            tracing::info!("settings: HDR isn't presentable here yet — turning it off");
-            self.hdr_enabled = false;
         }
         if self.audio_channels > caps.max_channels {
             tracing::info!(

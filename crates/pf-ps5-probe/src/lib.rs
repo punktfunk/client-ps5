@@ -96,6 +96,7 @@ const CHECKS: &[(&str, Check)] = &[
     ("quic-tls", quic_tls),
     ("mdns", mdns),
     ("session", session),
+    ("display-hdr", display_hdr),
     ("hdr-scanout", hdr_scanout),
 ];
 
@@ -259,6 +260,29 @@ fn affinity(_: &Ctx) -> Result<Outcome> {
 #[cfg(not(target_vendor = "sie"))]
 fn affinity(_: &Ctx) -> Result<Outcome> {
     Ok(Outcome::Skip("CPU masks are the console's".into()))
+}
+
+/// The display's `VideoOut` capability word, which the client reads to decide whether to ask for HDR.
+/// Its BT.2020 PQ bit should follow the console's HDR setting: run once with it on, once off.
+#[cfg(target_vendor = "sie")]
+fn display_hdr(_: &Ctx) -> Result<Outcome> {
+    use pf_ps5_sys::videoout::{device_capability, CAPABILITY_BT2020_PQ};
+    match device_capability() {
+        Ok(word) => ok(format!(
+            "capability {word:#x}, BT.2020 PQ {}",
+            if word & CAPABILITY_BT2020_PQ != 0 {
+                "set"
+            } else {
+                "clear"
+            }
+        )),
+        Err(code) => bail!("{}", pf_ps5_sys::sce_error(code)),
+    }
+}
+
+#[cfg(not(target_vendor = "sie"))]
+fn display_hdr(_: &Ctx) -> Result<Outcome> {
+    Ok(Outcome::Skip("VideoOut is the console's".into()))
 }
 
 /// `VideoOut` takes buffers in the HDR10 pixel format and flips them: four solid PQ fills, 8 s each,

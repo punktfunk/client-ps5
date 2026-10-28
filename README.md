@@ -3,12 +3,13 @@
 A homebrew client that streams games and desktops from a [punktfunk](https://docs.punktfunk.unom.io)
 host to a PS5.
 
-> **Experimental.** Nothing has run on a console yet. Builds go to testers, not to a release page.
+> **Experimental.** It streams on a tester's PS5 (firmware 13.42); `docs/NOTES.md` lists what each
+> round proved. Builds go to testers, not to a release page.
 
 ## What it is built to do
 
 - 3840×2160 at 59.94 or 119.88 Hz: H.264 and HEVC on the console's decoder, PyroWave on its GPU.
-- HDR10 when the host sends HDR.
+- HDR10 when the display shows HDR and the host sends it.
 - The punktfunk console UI: hosts, pairing, game libraries and settings, driven by the controller.
 - DualSense rumble, adaptive triggers and light bar, one controller per signed-in user.
 - Stereo sound.

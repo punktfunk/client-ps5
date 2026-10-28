@@ -66,12 +66,15 @@ fn entry() -> ash::Entry {
 struct Ps5Video {
     pyro: PyroLane,
     vd2: videodec2::Vd2Lane,
+    /// What [`display_hdr`] read at launch.
+    hdr: bool,
 }
 
 impl VideoDecoders for Ps5Video {
     fn caps(&self) -> VideoCaps {
         VideoCaps {
             pyrowave: self.pyro.available(),
+            hdr: self.hdr,
             ..VideoCaps::PS5
         }
     }
@@ -108,13 +111,38 @@ fn keep_off_decoder_cpus() {
     let _ = writeln!(klog::Klog::default(), "punktfunk-ps5: threads: {line}");
 }
 
+/// Whether the display shows HDR10, so a session asks the host for PQ only then. Read once a
+/// launch, before Mesa's WSI takes the output: an HDR setting changed while the title runs applies
+/// on the next launch. An unreadable capability keeps HDR on; the presenter still falls back to
+/// SDR when the output refuses HDR10.
+fn display_hdr() -> bool {
+    use pf_ps5_sys::videoout::{device_capability, CAPABILITY_BT2020_PQ};
+    use std::io::Write as _;
+    let (hdr, line) = match device_capability() {
+        Ok(word) => {
+            let hdr = word & CAPABILITY_BT2020_PQ != 0;
+            (
+                hdr,
+                format!("capability {word:#x}, HDR10 {}", if hdr { "on" } else { "off" }),
+            )
+        }
+        Err(code) => (
+            true,
+            format!("capability unreadable: {}; HDR10 kept on", pf_ps5_sys::sce_error(code)),
+        ),
+    };
+    let _ = writeln!(klog::Klog::default(), "punktfunk-ps5: display: {line}");
+    hdr
+}
+
 /// The data directory and the kernel log, for the probe, which needs nothing else.
 pub fn probe_parts() -> (PathBuf, Box<dyn std::io::Write + Send>) {
     (storage().0, Box::new(klog::Klog::default()))
 }
 
 /// Builds the console platform. Order matters: Videodec2 loads before anything else touches the
-/// process (the 13.60 trap), and Mesa's environment is set before the instance exists.
+/// process (the 13.60 trap), Mesa's environment is set before the instance exists, and the
+/// display's HDR capability is read before Mesa's WSI opens the output.
 pub fn platform() -> Result<Platform> {
     videodec2::warm_up();
     keep_off_decoder_cpus();
@@ -122,6 +150,7 @@ pub fn platform() -> Result<Platform> {
     let cache = dir.0.join("radv-cache");
     let _ = std::fs::create_dir_all(&cache);
     std::env::set_var("MESA_SHADER_CACHE_DIR", &cache);
+    let hdr = display_hdr();
     let dev = Arc::new(GpuDevice::new(entry(), Target::Display).context("bring up the GPU")?);
     let slot = Arc::new(VideoSlot::default());
     let presenter = Presenter::new(dev.clone(), slot.clone()).context("bring up the display")?;
@@ -138,6 +167,7 @@ pub fn platform() -> Result<Platform> {
         video: Arc::new(Ps5Video {
             pyro: PyroLane::new(dev.clone(), slot.clone()),
             vd2: videodec2::Vd2Lane::new(dev, slot),
+            hdr,
         }),
         audio: Arc::new(audio::Ps5Audio::new()?),
         pads: Box::new(pads::Ps5Pads::new()?),
