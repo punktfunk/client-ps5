@@ -69,7 +69,7 @@ impl Ps5Settings for Settings {
             }
         }
         if self.hdr_enabled && !caps.hdr {
-            tracing::info!("settings: HDR isn't presentable here yet — turning it off");
+            tracing::info!("settings: the display isn't showing HDR — turning HDR off");
             self.hdr_enabled = false;
         }
         if self.audio_channels > caps.max_channels {
