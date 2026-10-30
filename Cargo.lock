@@ -593,7 +593,7 @@ dependencies = [
 [[package]]
 name = "fec-rs"
 version = "0.1.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
+source = "git+https://git.unom.io/unom/punktfunk?rev=dd871ad7e22f02131efee64ef53225e5d3e48490#dd871ad7e22f02131efee64ef53225e5d3e48490"
 
 [[package]]
 name = "fiat-crypto"
@@ -1116,7 +1116,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "pf-client-core"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
+source = "git+https://git.unom.io/unom/punktfunk?rev=dd871ad7e22f02131efee64ef53225e5d3e48490#dd871ad7e22f02131efee64ef53225e5d3e48490"
 dependencies = [
  "anyhow",
  "cfg_aliases",
@@ -1131,7 +1131,7 @@ dependencies = [
 [[package]]
 name = "pf-client-video"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
+source = "git+https://git.unom.io/unom/punktfunk?rev=dd871ad7e22f02131efee64ef53225e5d3e48490#dd871ad7e22f02131efee64ef53225e5d3e48490"
 dependencies = [
  "anyhow",
  "ash",
@@ -1145,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "pf-console-ui"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
+source = "git+https://git.unom.io/unom/punktfunk?rev=dd871ad7e22f02131efee64ef53225e5d3e48490#dd871ad7e22f02131efee64ef53225e5d3e48490"
 dependencies = [
  "anyhow",
  "pf-client-core",
@@ -1347,7 +1347,7 @@ dependencies = [
 [[package]]
 name = "punktfunk-core"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
+source = "git+https://git.unom.io/unom/punktfunk?rev=dd871ad7e22f02131efee64ef53225e5d3e48490#dd871ad7e22f02131efee64ef53225e5d3e48490"
 dependencies = [
  "aes-gcm",
  "aws-lc-rs",
@@ -1383,7 +1383,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 [[package]]
 name = "pyrowave-sys"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
+source = "git+https://git.unom.io/unom/punktfunk?rev=dd871ad7e22f02131efee64ef53225e5d3e48490#dd871ad7e22f02131efee64ef53225e5d3e48490"
 dependencies = [
  "bindgen 0.73.2",
  "cmake",
