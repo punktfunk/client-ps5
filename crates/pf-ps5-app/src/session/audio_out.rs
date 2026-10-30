@@ -24,7 +24,7 @@ const TUNING: JitterTuning = JitterTuning {
     ..JitterTuning::WASAPI
 };
 
-fn playout(channels: u8) -> punktfunk_core::audio::AudioPlayout {
+pub(super) fn playout(channels: u8) -> punktfunk_core::audio::AudioPlayout {
     punktfunk_core::audio::AudioPlayout {
         tuning: TUNING,
         format: punktfunk_core::audio::plane::PlaneFormat::from_welcome(

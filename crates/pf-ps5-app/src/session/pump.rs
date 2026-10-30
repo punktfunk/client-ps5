@@ -7,7 +7,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
-use punktfunk_core::client::{AudioPacket, NativeClient};
+use punktfunk_core::client::NativeClient;
 use punktfunk_core::packet::{FLAG_SOF, USER_FLAG_RECOVERY_ANCHOR};
 use punktfunk_core::reanchor::DROP_CREDIT_WINDOW;
 use punktfunk_core::PunktfunkError;
@@ -441,40 +441,41 @@ pub(super) fn video_pump(
     VideoPump::new(client, stage, opener, stats, is_hdr).run(first, &stop);
 }
 
-/// How long an audio drain parks on an empty plane before re-checking `stop`.
-const AUDIO_WAIT: Duration = Duration::from_millis(100);
+/// One audio packet: how long the pump parks on an empty plane, so a quiet wire is judged on the
+/// wire's schedule and concealment drains at the rate the port does.
+const AUDIO_WAIT: Duration = Duration::from_millis(5);
 
-/// Shared body of both audio threads: pull packets, hand each to `play`, exit on `stop` or closed plane.
+/// The audio pump: packets off the transport into [`AudioStage`], which decodes into its sink, and
+/// a concealment tick whenever none came. Exits on `stop` or a closed plane.
 ///
 /// Dedicated thread per core's contract (packets arrive every 5 ms); avoids stalls from
 /// video pump blocking or main-loop rasterizer contention. Pull methods are one-thread-per-plane safe.
-fn audio_drain(client: &NativeClient, stop: &AtomicBool, what: &str, mut play: impl FnMut(&AudioPacket)) {
-    while !stop.load(Ordering::Relaxed) {
-        match client.next_audio(AUDIO_WAIT) {
-            Ok(packet) => play(&packet),
-            Err(PunktfunkError::NoFrame) => {}
-            Err(e) => {
-                tracing::info!("{what} ending: {e:#}");
-                break;
-            }
-        }
-    }
-}
-
-/// The audio pump: packets off the transport into [`AudioStage`], which decodes into its sink.
 pub(super) fn audio_pump(client: &NativeClient, stage: &mut AudioStage, stop: &AtomicBool) {
     let what = stage.sink_name();
     let mut packets: u32 = 0;
     // Consecutive refused packets, logged once per run: a sink that is gone refuses every one,
     // 200 a second, until the session ends.
     let mut failing: u32 = 0;
-    audio_drain(client, stop, what, |packet| {
+    while !stop.load(Ordering::Relaxed) {
+        let packet = match client.next_audio(AUDIO_WAIT) {
+            Ok(packet) => packet,
+            Err(PunktfunkError::NoFrame) => {
+                if let Err(e) = stage.quiet() {
+                    tracing::debug!("audio: concealment refused: {e:#}");
+                }
+                continue;
+            }
+            Err(e) => {
+                tracing::info!("{what} ending: {e:#}");
+                break;
+            }
+        };
         if let Err(e) = stage.play(packet.seq, packet.pts_ns, &packet.data) {
             if failing == 0 {
                 tracing::warn!("audio error (seq {}): {e:#}", packet.seq);
             }
             failing = failing.saturating_add(1);
-            return;
+            continue;
         }
         if failing > 0 {
             tracing::warn!("audio: playing again after {failing} refused packet(s)");
@@ -484,17 +485,18 @@ pub(super) fn audio_pump(client: &NativeClient, stage: &mut AudioStage, stop: &A
         // ~15s, matching the video heartbeat (packets are 5ms each).
         if packets % 3_000 == 0 {
             tracing::debug!(
-                "audio: {what}, depth={}, underruns={}, peak={:.4}",
+                "audio: {what}, depth={}, underruns={}, concealed={}ms, peak={:.4}",
                 stage
                     .depth_ms()
                     .map_or_else(|| "n/a".to_string(), |ms| format!("{ms}ms")),
                 stage
                     .underruns()
                     .map_or_else(|| "n/a".to_string(), |count| count.to_string()),
+                stage.concealed_ms(),
                 stage.peak(),
             );
         }
-    });
+    }
 }
 
 /// Spawns the audio thread feeding `stage`'s sink (`MediaPipeline::build`).

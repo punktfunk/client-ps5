@@ -153,10 +153,15 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
   the desktop in HDR at its usual colours (bundle 1792728081). An HDR game's in-game calibration
   reads correct through it (Kris, 2026-10-23, by eye); 300 s of play, 25165 pictures, decode to
   present p50 4.1 ms, none dropped (bundle 1792728541).
-- **Display HDR:** `sceVideoOutGetDeviceCapabilityInfo_` (NID `kGVLc3htQE8`) fills one `u64`
-  whose `0x80` bit is BT.2020 PQ (shadPS4 `video_out.h`, where the bit needs the display's HDR
-  and the title's HDR attribute). Whether the console's HDR setting clears it is what probe
-  `display-hdr` answers; the client asks for HDR only with the bit set, or when the call fails.
+- **Display HDR:** `sceVideoOutGetDeviceCapabilityInfo_` (NID `kGVLc3htQE8`) takes the record's
+  size as a third argument and fills a `u64` whose `0x80` bit is BT.2020 PQ (shadPS4
+  `video_out.h`, where the bit needs the display's HDR and the title's HDR attribute). Without
+  the size it fails `0x80290001`, HDR On and Off alike (round 8). The size that answers and
+  whether the console's HDR setting clears the bit are what probe `display-hdr` shows; the client
+  asks for HDR only with the bit set, or when the call fails. The firmware's own view is in the
+  kernel log: `v-request auto attr=…: hdmi:vrr hdr` / `sdr`, and `video: port:HDMI …` carries
+  `YCC2100_PQ` / `709`. With HDR Off the output stays 709 under an HDR10 swapchain and the
+  picture looks normal, so a bit that never moves costs nothing visible.
 - **Videodec2:** title process only (payload contexts fail), `sceSysmoduleLoadModule(207)` first,
   memory type 12 in 16 KiB pages, a DPB at least the stream's references plus one (a six-deep
   one failed every picture `811d0302` against Intel VAAPI's nine references at 1440p; sized from

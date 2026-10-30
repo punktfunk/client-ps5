@@ -4,9 +4,10 @@
 //! mixed down**: a layout the output cannot play is never requested (`core::caps`), so a width
 //! mismatch is a bug and is reported as one.
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::{bail, Result};
-use punktfunk_core::audio::{layout_for, AudioGapTracker, AudioLayout};
+use punktfunk_core::audio::{layout_for, AudioGapTracker, AudioLayout, DroughtConceal};
 
 use crate::core::media::{AudioSink, Samples};
 
@@ -26,6 +27,9 @@ pub struct AudioStage {
     channels: usize,
     /// Detects packets lost on the wire so they are concealed rather than skipped.
     gaps: AudioGapTracker,
+    /// Conceals a wire gone quiet, which `gaps` only sees once a later packet arrives.
+    drought: DroughtConceal,
+    last_packet: Instant,
     /// Concealment frames then the packet, filled only when there was concealment.
     f32: Vec<f32>,
     /// Samples in `pcm` from the last decode.
@@ -57,6 +61,8 @@ impl AudioStage {
             decoder,
             channels: wire.channels as usize,
             gaps: AudioGapTracker::new(),
+            drought: crate::session::audio_out::playout(channels).drought(),
+            last_packet: Instant::now(),
             f32: Vec::with_capacity(SAMPLES_PER_FRAME * MAX_CHANNELS * 2),
             last: 0,
             pcm: Box::new([0.0; SAMPLES_PER_FRAME * MAX_CHANNELS]),
@@ -68,8 +74,10 @@ impl AudioStage {
     }
 
     /// One packet, concealment included, into the sink. Concealment fills the hole BEFORE the
-    /// packet, so it is stamped that many milliseconds earlier than the packet.
+    /// packet, so it is stamped that many milliseconds earlier than the packet. Frames
+    /// [`Self::quiet`] already played are not concealed twice.
     pub fn play(&mut self, seq: u32, pts_ns: u64, payload: &[u8]) -> Result<()> {
+        self.last_packet = Instant::now();
         let Self {
             decoder,
             f32,
@@ -77,10 +85,12 @@ impl AudioStage {
             pcm,
             channels,
             gaps,
+            drought,
             sink,
+            ..
         } = self;
         let channels = *channels;
-        let missing = gaps.missing_before(seq);
+        let missing = gaps.missing_before(seq).saturating_sub(drought.packet());
         f32.clear();
         // A concealment frame gets exactly one frame of buffer: with no packet libopus takes
         // `out.len() / channels` as the frame size and rejects an illegal one.
@@ -109,6 +119,32 @@ impl AudioStage {
         sink.feed(Samples::F32(f32), stamp(0))
     }
 
+    /// Nothing arrived for a packet's length: one concealed frame if the ring is draining with
+    /// the wire, bounded so a dead stream goes silent. Called once a packet, so it keeps pace
+    /// with playout. A sink that reports no depth is never concealed for.
+    pub fn quiet(&mut self) -> Result<()> {
+        let depth_ms = self
+            .sink
+            .depth_ms()
+            .map_or(u32::MAX, |ms| ms.clamp(0, i64::from(u32::MAX)) as u32);
+        if self.last == 0 || !self.drought.conceal(self.last_packet.elapsed(), depth_ms) {
+            return Ok(());
+        }
+        let width = SAMPLES_PER_FRAME * self.channels;
+        let frames = self
+            .decoder
+            .decode_float(&[], &mut self.pcm[..width], false)
+            .map_err(|e| anyhow::anyhow!("opus decode: {e}"))?;
+        self.last = frames * self.channels;
+        self.sink.feed(Samples::F32(&self.pcm[..self.last]), 0)
+    }
+
+    /// Milliseconds concealed for a quiet wire this session. Low underruns bought with a
+    /// climbing figure here are a link in trouble.
+    pub fn concealed_ms(&self) -> u64 {
+        self.drought.total_ms()
+    }
+
     /// The sink's queue depth in ms, where it knows one.
     pub fn depth_ms(&self) -> Option<i64> {
         self.sink.depth_ms()
@@ -132,7 +168,7 @@ mod tests {
     use super::*;
     use crate::core::media::AudioFormat;
 
-    /// Keeps every buffer it is fed, with its stamp.
+    /// Keeps every buffer it is fed, with its stamp, and reports an empty queue.
     struct Recorder(Mutex<Vec<(usize, u64)>>, u8);
 
     impl AudioSink for Recorder {
@@ -151,6 +187,10 @@ mod tests {
             let Samples::F32(pcm) = samples;
             self.0.lock().unwrap().push((pcm.len(), host_pts_ns));
             Ok(())
+        }
+
+        fn depth_ms(&self) -> Option<i64> {
+            Some(0)
         }
     }
 
@@ -173,6 +213,30 @@ mod tests {
         assert_eq!(fed[0], (SAMPLES_PER_FRAME * 2, 100_000_000));
         assert_eq!(fed[1], (SAMPLES_PER_FRAME * 2 * 2, 105_000_000));
         assert!(stage.peak() > 0.0);
+    }
+
+    /// A quiet wire is concealed once it has lasted two frames, and the packet that ends it does
+    /// not conceal those frames again.
+    #[test]
+    fn a_drought_is_concealed_while_it_lasts_and_not_again_after() {
+        let sink = Arc::new(Recorder(Mutex::new(Vec::new()), 2));
+        let mut stage = AudioStage::new(sink.clone(), 2, AudioLayout::Standard.wire()).unwrap();
+        let mut encoder = opus::Encoder::new(SAMPLE_RATE, opus::Channels::Stereo, opus::Application::LowDelay).unwrap();
+        stage.quiet().unwrap();
+        assert!(sink.0.lock().unwrap().is_empty(), "nothing to conceal from yet");
+        stage.play(0, 100_000_000, &packet(&mut encoder)).unwrap();
+        stage.quiet().unwrap();
+        assert_eq!(sink.0.lock().unwrap().len(), 1, "one packet's silence is not a drought");
+        std::thread::sleep(std::time::Duration::from_millis(12));
+        stage.quiet().unwrap();
+        assert_eq!(sink.0.lock().unwrap().len(), 2);
+        assert_eq!(stage.concealed_ms(), 5);
+        stage.play(2, 110_000_000, &packet(&mut encoder)).unwrap();
+        assert_eq!(
+            sink.0.lock().unwrap()[2],
+            (SAMPLES_PER_FRAME * 2, 110_000_000),
+            "the lost packet was the concealed frame"
+        );
     }
 
     /// A width the sink does not play, or a layout this build does not know, is refused.
