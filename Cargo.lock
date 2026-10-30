@@ -593,7 +593,7 @@ dependencies = [
 [[package]]
 name = "fec-rs"
 version = "0.1.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=e7da9ad3dcfef09bcc2e3fadf930686f9c959edb#e7da9ad3dcfef09bcc2e3fadf930686f9c959edb"
+source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
 
 [[package]]
 name = "fiat-crypto"
@@ -859,7 +859,7 @@ dependencies = [
  "simd_cesu8",
  "thiserror",
  "walkdir",
- "windows-link 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -934,7 +934,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7c4b02199fee7c5d21a5ae7d8cfa79a6ef5bb2fc834d6e9058e89c825efdc55"
 dependencies = [
  "cfg-if",
- "windows-link 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -1116,7 +1116,7 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 [[package]]
 name = "pf-client-core"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=e7da9ad3dcfef09bcc2e3fadf930686f9c959edb#e7da9ad3dcfef09bcc2e3fadf930686f9c959edb"
+source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
 dependencies = [
  "anyhow",
  "cfg_aliases",
@@ -1131,7 +1131,7 @@ dependencies = [
 [[package]]
 name = "pf-client-video"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=e7da9ad3dcfef09bcc2e3fadf930686f9c959edb#e7da9ad3dcfef09bcc2e3fadf930686f9c959edb"
+source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
 dependencies = [
  "anyhow",
  "ash",
@@ -1145,7 +1145,7 @@ dependencies = [
 [[package]]
 name = "pf-console-ui"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=e7da9ad3dcfef09bcc2e3fadf930686f9c959edb#e7da9ad3dcfef09bcc2e3fadf930686f9c959edb"
+source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
 dependencies = [
  "anyhow",
  "pf-client-core",
@@ -1347,7 +1347,7 @@ dependencies = [
 [[package]]
 name = "punktfunk-core"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=e7da9ad3dcfef09bcc2e3fadf930686f9c959edb#e7da9ad3dcfef09bcc2e3fadf930686f9c959edb"
+source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
 dependencies = [
  "aes-gcm",
  "aws-lc-rs",
@@ -1383,7 +1383,7 @@ checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 [[package]]
 name = "pyrowave-sys"
 version = "0.45.0"
-source = "git+https://git.unom.io/unom/punktfunk?rev=e7da9ad3dcfef09bcc2e3fadf930686f9c959edb#e7da9ad3dcfef09bcc2e3fadf930686f9c959edb"
+source = "git+https://git.unom.io/unom/punktfunk?rev=277b11d94c80318d4edc3c27c46dcbc5c02b455c#277b11d94c80318d4edc3c27c46dcbc5c02b455c"
 dependencies = [
  "bindgen 0.73.2",
  "cmake",
@@ -2379,8 +2379,8 @@ dependencies = [
 
 [[package]]
 name = "windows"
-version = "0.62.2"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "windows-collections",
  "windows-core",
@@ -2392,38 +2392,38 @@ dependencies = [
 
 [[package]]
 name = "windows-collections"
-version = "0.3.2"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "windows-core",
 ]
 
 [[package]]
 name = "windows-core"
-version = "0.62.2"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "windows-implement",
  "windows-interface",
- "windows-link 0.2.1 (git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc)",
+ "windows-link 0.100.0",
  "windows-result",
  "windows-strings",
 ]
 
 [[package]]
 name = "windows-future"
-version = "0.3.2"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "windows-core",
- "windows-link 0.2.1 (git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc)",
+ "windows-link 0.100.0",
  "windows-threading",
 ]
 
 [[package]]
 name = "windows-implement"
-version = "0.60.2"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2432,8 +2432,8 @@ dependencies = [
 
 [[package]]
 name = "windows-interface"
-version = "0.59.3"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2448,22 +2448,21 @@ checksum = "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5"
 
 [[package]]
 name = "windows-link"
-version = "0.2.1"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 
 [[package]]
 name = "windows-numerics"
-version = "0.3.1"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "windows-core",
- "windows-link 0.2.1 (git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc)",
 ]
 
 [[package]]
 name = "windows-reference"
-version = "0.1.0"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "windows-core",
  "windows-time",
@@ -2471,18 +2470,18 @@ dependencies = [
 
 [[package]]
 name = "windows-result"
-version = "0.4.1"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
- "windows-link 0.2.1 (git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc)",
+ "windows-link 0.100.0",
 ]
 
 [[package]]
 name = "windows-strings"
-version = "0.5.1"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
- "windows-link 0.2.1 (git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc)",
+ "windows-link 0.100.0",
 ]
 
 [[package]]
@@ -2500,7 +2499,7 @@ version = "0.61.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc"
 dependencies = [
- "windows-link 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -2521,19 +2520,18 @@ dependencies = [
 
 [[package]]
 name = "windows-threading"
-version = "0.2.1"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
- "windows-link 0.2.1 (git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc)",
+ "windows-link 0.100.0",
 ]
 
 [[package]]
 name = "windows-time"
-version = "0.1.0"
-source = "git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc#acb5a1a7441033d9312b16842af02eb0c2b403dc"
+version = "0.100.0"
+source = "git+https://github.com/microsoft/windows-rs?rev=58217a690#58217a690d6256ee229044a174de67d72d28bc35"
 dependencies = [
  "windows-core",
- "windows-link 0.2.1 (git+https://github.com/microsoft/windows-rs?rev=acb5a1a7441033d9312b16842af02eb0c2b403dc)",
 ]
 
 [[package]]
