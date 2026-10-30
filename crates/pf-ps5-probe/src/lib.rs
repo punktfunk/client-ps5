@@ -268,8 +268,8 @@ fn affinity(_: &Ctx) -> Result<Outcome> {
 fn display_hdr(_: &Ctx) -> Result<Outcome> {
     use pf_ps5_sys::videoout::{device_capability, CAPABILITY_BT2020_PQ};
     match device_capability() {
-        Ok(word) => ok(format!(
-            "capability {word:#x}, BT.2020 PQ {}",
+        Ok((word, size)) => ok(format!(
+            "capability {word:#x} ({size} B), BT.2020 PQ {}",
             if word & CAPABILITY_BT2020_PQ != 0 {
                 "set"
             } else {

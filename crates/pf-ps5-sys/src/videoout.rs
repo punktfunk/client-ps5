@@ -22,6 +22,8 @@ const DIRECT_TYPE_CPU: i32 = 12;
 const PROT_CPU_GPU_RW: i32 = 0x01 | 0x02 | 0x10 | 0x20;
 /// The capability word's bit for a display that shows BT.2020 PQ (shadPS4 `video_out.h`).
 pub const CAPABILITY_BT2020_PQ: u64 = 0x80;
+/// Record sizes offered to the capability call, smallest first. shadPS4's record is one `u64`.
+const CAPABILITY_SIZES: [usize; 3] = [8, 16, 32];
 
 #[repr(C)]
 struct Buffer {
@@ -63,29 +65,34 @@ extern "C" {
     ) -> i32;
     fn sceVideoOutSubmitFlip(handle: i32, index: i32, mode: u32, arg: i64) -> i32;
     fn sceVideoOutWaitVblank(handle: i32) -> i32;
-    /// NID `kGVLc3htQE8`; `SceVideoOutDeviceCapabilityInfo` is one `u64`.
-    fn sceVideoOutGetDeviceCapabilityInfo_(handle: i32, info: *mut u64) -> i32;
+    /// NID `kGVLc3htQE8`. The trailing `_` is the sized form, like `sceVideoOutModeSetAny_`:
+    /// `size` is the caller's record, and a size it refuses fails `0x80290001`.
+    fn sceVideoOutGetDeviceCapabilityInfo_(handle: i32, info: *mut u64, size: usize) -> i32;
 }
 
-/// The display's capability word, [`CAPABILITY_BT2020_PQ`] set when it shows HDR10. Opens and
-/// closes its own handle: Mesa's WSI keeps the output once it opens it, so this runs first.
-pub fn device_capability() -> Result<u64, i32> {
+/// The display's capability word and the record size it answered at,
+/// [`CAPABILITY_BT2020_PQ`] set when it shows HDR10. Opens and closes its own handle: Mesa's WSI
+/// keeps the output once it opens it, so this runs first.
+pub fn device_capability() -> Result<(u64, usize), i32> {
     // SAFETY: a null parameter block is the default output; the handle is closed below.
     let handle = unsafe { sceVideoOutOpen(USER_SYSTEM, 0, 0, core::ptr::null()) };
     if handle < 0 {
         return Err(handle);
     }
-    // Wider than the one word, in case this firmware's record is.
+    // Sized for the widest record offered, in case this firmware's is wider than the one word.
     let mut info = [0_u64; 4];
-    // SAFETY: `info` is live and writable for the call.
-    let rc = unsafe { sceVideoOutGetDeviceCapabilityInfo_(handle, info.as_mut_ptr()) };
+    let mut answer = Err(0);
+    for size in CAPABILITY_SIZES {
+        // SAFETY: `info` is live, and 32 bytes long, the largest size offered.
+        let rc = unsafe { sceVideoOutGetDeviceCapabilityInfo_(handle, info.as_mut_ptr(), size) };
+        answer = if rc == 0 { Ok((info[0], size)) } else { Err(rc) };
+        if rc == 0 {
+            break;
+        }
+    }
     // SAFETY: `handle` came from sceVideoOutOpen and isn't used again.
     unsafe { sceVideoOutClose(handle) };
-    if rc == 0 {
-        Ok(info[0])
-    } else {
-        Err(rc)
-    }
+    answer
 }
 
 /// One solid fill: a name, its 10-bit PQ codes, and how long it shows.

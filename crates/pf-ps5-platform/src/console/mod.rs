@@ -119,11 +119,14 @@ fn display_hdr() -> bool {
     use pf_ps5_sys::videoout::{device_capability, CAPABILITY_BT2020_PQ};
     use std::io::Write as _;
     let (hdr, line) = match device_capability() {
-        Ok(word) => {
+        Ok((word, size)) => {
             let hdr = word & CAPABILITY_BT2020_PQ != 0;
             (
                 hdr,
-                format!("capability {word:#x}, HDR10 {}", if hdr { "on" } else { "off" }),
+                format!(
+                    "capability {word:#x} ({size} B), HDR10 {}",
+                    if hdr { "on" } else { "off" }
+                ),
             )
         }
         Err(code) => (
