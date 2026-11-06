@@ -347,7 +347,9 @@ fn stream(
             Ok(report) => perf.note(&report),
             Err(e) => {
                 tracing::error!("present: {e:#}");
-                break Next::End(StreamOutcome::ReturnToMenu(Some("The picture stopped.".into())));
+                break Next::End(StreamOutcome::ReturnToMenu(Some(
+                    pf_l10n::client::ended_unexpected().into(),
+                )));
             }
         }
 
