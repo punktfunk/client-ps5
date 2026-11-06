@@ -303,6 +303,7 @@ pub fn platform(opts: &Options) -> Result<Platform> {
             firmware: String::new(),
             gpu,
             ui,
+            languages: Vec::new(),
         },
     })
 }

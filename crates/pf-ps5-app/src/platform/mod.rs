@@ -41,6 +41,8 @@ pub struct DeviceInfo {
     pub gpu: String,
     /// How the UI layer draws: backend, size, and why it fell back to the CPU.
     pub ui: String,
+    /// The system's languages as BCP-47 tags, most preferred first. Empty reads English.
+    pub languages: Vec<String>,
 }
 
 /// Refresh rate of the scan-out, in millihertz (59 940, 119 880).

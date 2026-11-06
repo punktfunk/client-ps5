@@ -138,6 +138,25 @@ fn display_hdr() -> bool {
     hdr
 }
 
+/// The console's language as a one-tag list, empty when it does not say or says one the table
+/// does not know. Reports to the kernel log, since logging does not exist yet.
+fn system_languages() -> Vec<String> {
+    use pf_ps5_sys::system::{sceSystemServiceParamGetInt, PARAM_ID_LANG};
+    use std::io::Write as _;
+    let mut code = -1;
+    // SAFETY: `code` is a live i32 the call writes through.
+    let rc = unsafe { sceSystemServiceParamGetInt(PARAM_ID_LANG, &mut code) };
+    let (tags, line) = if rc != 0 {
+        (Vec::new(), format!("unreadable: {}", pf_ps5_sys::sce_error(rc)))
+    } else if let Some(tag) = crate::language::tag(code) {
+        (vec![tag.to_string()], format!("{code} is {tag}"))
+    } else {
+        (Vec::new(), format!("{code} is not a language this build knows"))
+    };
+    let _ = writeln!(klog::Klog::default(), "punktfunk-ps5: language: {line}");
+    tags
+}
+
 /// The data directory and the kernel log, for the probe, which needs nothing else.
 pub fn probe_parts() -> (PathBuf, Box<dyn std::io::Write + Send>) {
     (storage().0, Box::new(klog::Klog::default()))
@@ -164,6 +183,7 @@ pub fn platform() -> Result<Platform> {
             .map_or_else(String::new, |v| format!("{:x}.{:02x}", v >> 24, (v >> 16) & 0xff)),
         gpu: format!("{} (mesa {MESA_PIN})", dev.name),
         ui: presenter.ui(),
+        languages: system_languages(),
     };
     Ok(Platform {
         display: Box::new(presenter),

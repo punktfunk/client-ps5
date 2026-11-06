@@ -54,7 +54,7 @@ pub(super) fn run(app: &mut App, notice: Option<String>) -> Result<UiOutcome> {
         profiles: false,
         spatial: false,
         prompts_unlock: false,
-        languages: Vec::new(),
+        languages: app.device.languages.clone(),
     };
     let scripted = app.test_run.as_ref().and_then(|run| {
         let host = run.host.as_deref()?;
