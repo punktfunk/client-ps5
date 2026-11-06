@@ -221,7 +221,7 @@ fn pad_label(batch: &[PadSample]) -> Option<&'static str> {
     batch.first().map(|s| match s.kind {
         PadKind::DualSense => "DualSense",
         PadKind::DualSenseEdge => "DualSense Edge",
-        PadKind::Other => "Controller",
+        PadKind::Other => pf_l10n::console::console_pad_fallback_name(),
     })
 }
 
@@ -236,12 +236,14 @@ fn shown_kind(stored: GamepadType, batch: &[PadSample]) -> GamepadType {
 
 fn pad_infos(batch: &[PadSample], stored: GamepadType) -> impl Iterator<Item = PadInfo> + '_ {
     batch.iter().map(move |s| PadInfo {
-        name: pad_label(std::slice::from_ref(s)).unwrap_or("Controller").into(),
+        name: pad_label(std::slice::from_ref(s))
+            .unwrap_or(pf_l10n::console::console_pad_fallback_name())
+            .into(),
         key: format!("slot{}", s.slot),
         pref: shown_kind(stored, std::slice::from_ref(s)).to_core(),
         steam_virtual: false,
         battery: None,
-        detail: format!("Player {}", s.slot + 1),
+        detail: pf_l10n::console::console_pad_player(s.slot + 1),
         forwarded: true,
         rumble: true,
     })

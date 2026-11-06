@@ -352,13 +352,14 @@ impl Connected {
 
     /// The sentence for the menu's notice when the session ended on its own.
     pub fn end_message(&self) -> String {
+        use pf_l10n::{client, console};
         use punktfunk_core::client::PunktfunkEndReason as R;
         match self.end_reason() {
-            R::GameExited => "The game exited.",
-            R::HostEnded => "The host ended the session.",
-            R::HostError => "The host closed the session with an error.",
-            R::Lost => "The connection was lost.",
-            R::None | R::Local => "The host closed the connection.",
+            R::GameExited => console::console_ended_game_exited(),
+            R::HostEnded => console::console_ended_host_ended(),
+            R::HostError => client::ended_host_error(),
+            R::Lost => client::ended_lost(),
+            R::None | R::Local => client::ended_closed(),
         }
         .to_string()
     }
