@@ -18,6 +18,7 @@ tracing-appender = "0.2"
 punktfunk-core.workspace = true
 pf-client-core.workspace = true
 pf-console-ui.workspace = true
+pf-l10n.workspace = true
 skia-safe.workspace = true
 # Library and art fetch over pinned TLS. No ureq backend feature: the provider is named in code.
 ureq = { version = "3", features = ["rustls-no-provider", "rustls-webpki-roots"], default-features = false }
