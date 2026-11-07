@@ -145,7 +145,9 @@ pub(super) fn run(app: &mut App, notice: Option<String>) -> Result<UiOutcome> {
                         }
                         Err(e) => {
                             tracing::warn!("console: launch refused: {e:#}");
-                            handles.console.set_notice(format!("Couldn't start the stream — {e}"));
+                            handles
+                                .console
+                                .set_notice(pf_l10n::client::dial_stream_start_failed().into());
                         }
                     }
                 }
