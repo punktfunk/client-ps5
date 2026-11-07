@@ -87,6 +87,8 @@ pub fn run(platform: Platform) -> ! {
         log,
         device,
     } = platform;
+    // Before any text is read: the menu's, an error's, a notice's.
+    let language = pf_l10n::set_languages(&device.languages);
     crate::services::paths::install(storage.data_dir());
     // Without a log there is nothing to diagnose a failure from; the title still runs.
     let flush = crate::logger::init_subscriber(&crate::services::paths::logs_dir(), log).ok();
@@ -100,6 +102,7 @@ pub fn run(platform: Platform) -> ! {
         device.gpu,
         device.ui,
     );
+    tracing::info!("language {language} from {:?}", device.languages);
     crate::core::caps::install(video.caps());
     // ureq's agents resolve their provider from the process default and panic without one.
     punktfunk_core::tls::install_default_provider();

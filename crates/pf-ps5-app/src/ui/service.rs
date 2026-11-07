@@ -396,7 +396,7 @@ impl Service {
                     },
                 );
                 self.handles.console.set_licenses(vec![pf_console_ui::LicenseSection {
-                    heading: "Third-party software".into(),
+                    heading: pf_l10n::client::about_third_party_heading().into(),
                     text,
                 }]);
             }
@@ -550,7 +550,7 @@ impl Service {
                 self.handles.library.set_phase(
                     &req,
                     LibraryPhase::Error {
-                        title: "Couldn't load the library".into(),
+                        title: pf_l10n::client::lib_load_failed().into(),
                         body: e.to_string(),
                         can_retry,
                     },
@@ -875,7 +875,7 @@ impl Service {
             .map(|i| state.known_hosts[i].mac.clone())
             .unwrap_or_default();
         if macs.is_empty() {
-            self.notice(format!("{} has no wake address on record", row.name));
+            self.notice(pf_l10n::console::console_dial_no_wake_address(&row.name));
             // Nothing to send: end the card the shell opened.
             self.handles.console.set_wake(Some(WakeStatus {
                 req,
@@ -905,11 +905,11 @@ impl Service {
                 move || match power::invoke(&addr, mgmt, &identity, pin, &action_id, budget::REQUEST) {
                     Ok(()) => {
                         tracing::info!("console: {host_name} accepted {action_id}");
-                        console.set_notice(format!("{host_name}: {label} — on its way"));
+                        console.set_notice(pf_l10n::client::hostcard_action_sent_body(&host_name, &label));
                     }
                     Err(e) => {
                         tracing::warn!("console: {host_name} refused {action_id}: {e}");
-                        console.set_notice(format!("{label} failed — {e}"));
+                        console.set_notice(pf_l10n::client::hostcard_action_failed(&label, e));
                     }
                 },
             )
@@ -1006,8 +1006,8 @@ fn same_host(h: &KnownHost, d: &DiscoveredHost) -> bool {
 /// worse than naming the two it does understand.
 fn power_rows(rights: PowerRights) -> Vec<HostAction> {
     [
-        (ExitAction::Sleep, "Sleep", false),
-        (ExitAction::Shutdown, "Shut down", true),
+        (ExitAction::Sleep, pf_l10n::host::host_power_sleep(), false),
+        (ExitAction::Shutdown, pf_l10n::host::host_power_shutdown(), true),
     ]
     .into_iter()
     .filter_map(|(action, label, danger)| {
