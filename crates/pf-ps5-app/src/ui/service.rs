@@ -114,6 +114,8 @@ pub(crate) struct Service {
     pair: Option<Receiver<PairOutcome>>,
     /// Set for the wake worker to see; taking it is how a cancel or a second wake stops it.
     wake_cancel: Option<Arc<AtomicBool>>,
+    /// The console's input test is up: the menu loop feeds it the pads instead of menu moves.
+    pad_test: bool,
 }
 
 impl Service {
@@ -139,7 +141,13 @@ impl Service {
             art: None,
             pair: None,
             wake_cancel: None,
+            pad_test: false,
         }
+    }
+
+    /// Whether the console's input test is on; see [`ConsoleCmd::PadTest`].
+    pub(crate) fn pad_test(&self) -> bool {
+        self.pad_test
     }
 
     /// One menu tick: fold in whatever the background answered, start a sweep if one is due,
@@ -417,12 +425,12 @@ impl Service {
             } => self.bind_host_profile(&key, profile_id),
             // Presentation only: which profiles ride as cards behind the host's tile.
             ConsoleCmd::SetPin { key, preset_id, pin } => self.set_pin(&key, preset_id, pin),
-            // Nothing to do: no status client (Resume badges stay off), no clipboard, no pad test
-            // or prompt here, no title is endable or installable (`to_model`), and the profile
-            // picker is off (`ConsoleOptions::profiles`).
+            ConsoleCmd::PadTest { on } => self.pad_test = on,
+            // Nothing to do: no status client (Resume badges stay off), no clipboard, no prompt
+            // here, no title is endable or installable (`to_model`), and the profile picker is
+            // off (`ConsoleOptions::profiles`).
             ConsoleCmd::RefreshRunning { .. }
             | ConsoleCmd::SetClipboard { .. }
-            | ConsoleCmd::PadTest { .. }
             | ConsoleCmd::PromptAnswer { .. }
             | ConsoleCmd::EndGame { .. }
             | ConsoleCmd::Install { .. }
@@ -1247,6 +1255,8 @@ fn to_model(games: &[GameEntry]) -> Vec<LibraryGame> {
             endable: false,
             // Plugin installs ride on the desktop's catalog; this one lists installed titles.
             install: None,
+            // Host per-title settings ride on the desktop's catalog, as `install` does.
+            overrides: None,
         })
         .collect()
 }

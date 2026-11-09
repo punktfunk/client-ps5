@@ -3,7 +3,7 @@
 //!
 //! The main thread presents at the display's rate. The input thread polls the pads at 250 Hz,
 //! sends their input straight to the host, applies the host's rumble and trigger feedback,
-//! and hands the main thread only what it must act on (the dial, the escape chord).
+//! and hands the main thread only what it must act on (the dial, a fired shortcut).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -48,14 +48,14 @@ struct InputThread {
 }
 
 impl InputThread {
-    fn start(pads: Box<dyn Pads>, input: InputSender, kind: GamepadType) -> Self {
+    fn start(pads: Box<dyn Pads>, input: InputSender, kind: GamepadType, router: PadRouter) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let (to, rx) = mpsc::channel();
         let (tx, from) = mpsc::channel();
         let thread_stop = stop.clone();
         let handle = std::thread::Builder::new()
             .name("pf-input".into())
-            .spawn(move || input_loop(pads, &input, kind, &thread_stop, &rx, &tx))
+            .spawn(move || input_loop(pads, &input, kind, router, &thread_stop, &rx, &tx))
             .expect("spawn the input thread");
         Self { stop, to, from, handle }
     }
@@ -71,11 +71,11 @@ fn input_loop(
     mut pads: Box<dyn Pads>,
     input: &InputSender,
     kind: GamepadType,
+    mut router: PadRouter,
     stop: &AtomicBool,
     rx: &Receiver<ToInput>,
     tx: &Sender<Routed>,
 ) -> Box<dyn Pads> {
-    let mut router = PadRouter::default();
     let mut batch: Vec<PadSample> = Vec::new();
     let mut wire = Vec::new();
     let mut routed = Vec::new();
@@ -247,7 +247,8 @@ fn stream(
         tracing::error!("stream: the pads are still held by another loop");
         return Next::End(StreamOutcome::ReturnToMenu(None));
     };
-    let input = InputThread::start(pads, connected.input(), settings.gamepad_type());
+    let router = PadRouter::new(&settings.shortcuts, &settings.overlay_actions);
+    let input = InputThread::start(pads, connected.input(), settings.gamepad_type(), router);
     let fonts = match pf_console_ui::theme::build_fonts() {
         Ok(f) => Some(f),
         Err(e) => {
@@ -302,7 +303,7 @@ fn stream(
             tracing::info!("rest mode: ending the stream");
             break Next::End(StreamOutcome::ReturnToMenu(None));
         }
-        if let Some(n) = take_routed(&input, &mut ring, width, height) {
+        if let Some(n) = take_routed(&input, &mut ring, &mut hud, connected, (width, height)) {
             break n;
         }
         ring.tick();
@@ -369,8 +370,14 @@ fn stream(
     next
 }
 
-/// The input thread's hand-offs: the dial and the escape chord.
-fn take_routed(input: &InputThread, ring: &mut pf_console_ui::Ring, width: u32, height: u32) -> Option<Next> {
+/// The input thread's hand-offs: the dial, and a shortcut's dial command.
+fn take_routed(
+    input: &InputThread,
+    ring: &mut pf_console_ui::Ring,
+    hud: &mut StatsOverlay,
+    connected: &Connected,
+    (width, height): (u32, u32),
+) -> Option<Next> {
     for routed in input.from.try_iter() {
         match routed {
             Routed::ToggleDial => ring.input(RingInput::Toggle {
@@ -380,9 +387,11 @@ fn take_routed(input: &InputThread, ring: &mut pf_console_ui::Ring, width: u32, 
             Routed::Dial(ev) => {
                 ring.menu(ev);
             }
-            Routed::Chord => {
-                tracing::info!("escape chord held — ending the stream");
-                return Some(Next::End(StreamOutcome::ReturnToMenu(None)));
+            Routed::Command(cmd) => {
+                tracing::info!("shortcut: {cmd:?}");
+                if let Some(n) = run_command(cmd, hud, connected) {
+                    return Some(n);
+                }
             }
         }
     }
@@ -391,13 +400,21 @@ fn take_routed(input: &InputThread, ring: &mut pf_console_ui::Ring, width: u32, 
 
 fn take_ring_commands(ring: &mut pf_console_ui::Ring, hud: &mut StatsOverlay, connected: &Connected) -> Option<Next> {
     while let Some(cmd) = ring.take_command() {
-        match cmd {
-            RingCommand::EndStream | RingCommand::DisconnectLinger => {
-                return Some(Next::End(StreamOutcome::ReturnToMenu(None)));
-            }
-            RingCommand::CycleStats => hud.cycle(connected),
-            other => tracing::info!("dial: {other:?} does nothing on this console"),
+        if let Some(n) = run_command(cmd, hud, connected) {
+            return Some(n);
         }
+    }
+    None
+}
+
+/// One dial command, picked on the dial or fired by a shortcut (`pads::command`).
+fn run_command(cmd: RingCommand, hud: &mut StatsOverlay, connected: &Connected) -> Option<Next> {
+    match cmd {
+        RingCommand::EndStream | RingCommand::DisconnectLinger => {
+            return Some(Next::End(StreamOutcome::ReturnToMenu(None)));
+        }
+        RingCommand::CycleStats => hud.cycle(connected),
+        other => tracing::info!("dial: {other:?} does nothing on this console"),
     }
     None
 }
