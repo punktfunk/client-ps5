@@ -248,6 +248,8 @@ fn pad_infos(batch: &[PadSample], stored: GamepadType) -> impl Iterator<Item = P
         detail: pf_l10n::console::console_pad_player(s.slot + 1),
         forwarded: true,
         rumble: true,
+        // No pad audio lane here.
+        audio: false,
     })
 }
 

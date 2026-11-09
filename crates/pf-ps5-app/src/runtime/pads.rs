@@ -1,10 +1,16 @@
 //! Pad samples into what the loops act on: wire input for the host, menu events for the console,
-//! the dial's own presses, and the hold-to-exit chord. Pure: samples in, events out.
+//! the dial's own presses, and the shortcuts. Pure: samples in, events out.
+//!
+//! Each pad runs a shortcut [`Engine`] first; only what it forwards reaches the host or the
+//! open dial. The defaults are `Client::Ps5`'s: the touchpad click stands in for Create.
 
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use pf_client_core::menu_nav::{MenuEvent, MenuSample};
-use punktfunk_core::input::{gamepad, InputEvent, InputKind};
+use pf_client_core::overlay_actions::{OverlayConfig, RingPlatform, SlotId};
+use pf_client_core::ring::RingCommand;
+use pf_client_core::shortcuts::{resolve, Action, Binding, Client, Device, Engine, Event, Out, Phase};
+use punktfunk_core::input::{gamepad, key_vk, InputEvent, InputKind};
 
 use crate::core::dial::{PadDial, PadRoute};
 use crate::core::model::GamepadType;
@@ -12,16 +18,6 @@ use crate::platform::{PadKind, PadSample};
 
 /// Slots the console reports: one per signed-in user.
 pub const SLOTS: usize = 4;
-
-/// What stands in for Select on the console: the system keeps Create, so the touchpad click
-/// opens the dial (with Cross) and completes the escape chord.
-pub const MODIFIER: u32 = gamepad::BTN_TOUCHPAD;
-
-/// The escape chord, punktfunk's L1+R1+Start+Select with [`MODIFIER`] as Select.
-const CHORD: u32 = gamepad::BTN_LB | gamepad::BTN_RB | gamepad::BTN_START | MODIFIER;
-
-/// How long [`CHORD`] is held before it ends the stream. Its buttons are game input too.
-pub const CHORD_HOLD: Duration = Duration::from_millis(1000);
 
 /// Every button bit a `DualSense` reports, for releases.
 const BUTTONS: [u32; 18] = [
@@ -46,29 +42,63 @@ const BUTTONS: [u32; 18] = [
 ];
 
 /// What one step produced besides wire input.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Routed {
-    /// Touchpad+Cross: open the dial (or close it).
+    /// A shortcut opened or closed the dial, or the dial's Back closed it.
     ToggleDial,
     /// A press the open dial takes.
     Dial(MenuEvent),
-    /// The escape chord was held for [`CHORD_HOLD`].
-    Chord,
+    /// A shortcut ran one of the dial's commands.
+    Command(RingCommand),
 }
+
+/// The ring blob's key combinations: id, then the keys as VKs.
+type Keys = [(String, Vec<u8>)];
 
 struct Slot {
     last: PadSample,
     dial: PadDial,
+    shortcuts: Engine,
 }
 
 /// Per-slot state across samples.
-#[derive(Default)]
 pub struct PadRouter {
     slots: [Option<Slot>; SLOTS],
-    chord_since: Option<Instant>,
+    /// What each pad's engine starts from.
+    bindings: Vec<Binding>,
+    keys: Vec<(String, Vec<u8>)>,
 }
 
 impl PadRouter {
+    /// `shortcuts` and `overlay_actions` are the settings blobs; an empty one is the defaults.
+    /// Keeps the bindings this console acts on: the dial, the commands [`command`] maps, and
+    /// the ring's key combinations.
+    pub fn new(shortcuts: &str, overlay_actions: &str) -> Self {
+        let keys: Vec<(String, Vec<u8>)> = OverlayConfig::parse(overlay_actions, RingPlatform::Desktop)
+            .shortcuts
+            .into_iter()
+            .filter_map(|s| {
+                let vks: Option<Vec<u8>> = s.keys.iter().map(|k| key_vk(k)).collect();
+                vks.filter(|v| !v.is_empty()).map(|v| (s.id, v))
+            })
+            .collect();
+        let bindings = resolve(shortcuts, Client::Ps5, false, "")
+            .bindings
+            .into_iter()
+            .filter(|b| match &b.action {
+                Action::Ring => true,
+                Action::Slot(SlotId::Shortcut(id)) => keys.iter().any(|(k, _)| k == id),
+                Action::Slot(slot) => command(slot).is_some(),
+                Action::Unknown(_) => false,
+            })
+            .collect();
+        Self {
+            slots: Default::default(),
+            bindings,
+            keys,
+        }
+    }
+
     /// Diffs one batch against the last. `dial_open` is whether the dial is up now; `kind` is
     /// the pad kind the session asked for (`Auto` mirrors the pad). Wire events land in `wire`.
     pub fn step(
@@ -84,7 +114,7 @@ impl PadRouter {
             let pad = index as u8;
             let Some(sample) = batch.iter().find(|s| usize::from(s.slot) == index) else {
                 if let Some(gone) = slot.take() {
-                    release_into(pad, &gone.last, wire);
+                    gone.release(&self.keys, wire);
                     wire.push(remove_event(pad));
                 }
                 continue;
@@ -97,20 +127,12 @@ impl PadRouter {
                         kind: sample.kind,
                         ..PadSample::default()
                     },
-                    dial: PadDial::default().with_modifier(MODIFIER),
+                    dial: PadDial::default(),
+                    shortcuts: Engine::new(&self.bindings, Device::Pad),
                 }
             });
-            diff(pad, state, sample, dial_open, wire, routed);
+            diff(state, sample, now, dial_open, &self.keys, wire, routed);
         }
-        let held = self.slots.iter().flatten().any(|s| s.last.buttons & CHORD == CHORD);
-        self.chord_since = match (held, self.chord_since) {
-            (true, Some(t)) if now.duration_since(t) >= CHORD_HOLD => {
-                routed.push(Routed::Chord);
-                None
-            }
-            (true, since) => Some(since.unwrap_or(now)),
-            (false, _) => None,
-        };
     }
 
     /// The dial opened: release what the host still holds from every pad.
@@ -134,12 +156,101 @@ impl PadRouter {
     /// Lets go of everything the host holds and forgets the pads, so the next step re-declares
     /// them. For focus loss and every way out of a stream.
     pub fn release_all(&mut self, wire: &mut Vec<InputEvent>) {
-        for (index, slot) in self.slots.iter_mut().enumerate() {
+        for slot in &mut self.slots {
             if let Some(gone) = slot.take() {
-                release_into(index as u8, &gone.last, wire);
+                gone.release(&self.keys, wire);
             }
         }
-        self.chord_since = None;
+    }
+}
+
+impl Slot {
+    /// The engine's outputs: forwarded edges to the open dial or the host, lifts as releases,
+    /// fired shortcuts to the loops or the host's keyboard.
+    fn apply(
+        &mut self,
+        out: Vec<Out>,
+        dial_open: bool,
+        keys: &Keys,
+        wire: &mut Vec<InputEvent>,
+        routed: &mut Vec<Routed>,
+    ) {
+        for o in out {
+            match o {
+                Out::Forward(bit, down) => self.route(bit, down, dial_open, wire, routed),
+                Out::Lift(bits) => {
+                    for bit in bits {
+                        self.route(bit, false, dial_open, wire, routed);
+                    }
+                }
+                Out::Fire(Action::Ring, _) => routed.push(Routed::ToggleDial),
+                Out::Fire(Action::Slot(SlotId::Shortcut(id)), phase) => {
+                    if let Some((_, vks)) = keys.iter().find(|(k, _)| *k == id) {
+                        key_events(vks, phase, wire);
+                    }
+                }
+                Out::Fire(Action::Slot(slot), Phase::Once) => routed.extend(command(&slot).map(Routed::Command)),
+                Out::Fire(..) => {}
+            }
+        }
+    }
+
+    /// One edge the engine let through: the open dial takes it, else the host. The dial also
+    /// drops a release whose press it took, so the host never sees half a press.
+    fn route(&mut self, bit: u32, down: bool, dial_open: bool, wire: &mut Vec<InputEvent>, routed: &mut Vec<Routed>) {
+        match self.dial.button(bit, down, dial_open) {
+            PadRoute::Forward => wire.push(bit_event(bit, down, self.last.slot)),
+            PadRoute::Drop => {}
+            PadRoute::Menu(MenuEvent::Back) => routed.push(Routed::ToggleDial),
+            PadRoute::Menu(ev) => routed.push(Routed::Dial(ev)),
+        }
+    }
+
+    /// The pad is going: the host lets go of its buttons and a held key combination, and its
+    /// axes centre. Every button the host holds is one the engine forwarded or still owes.
+    fn release(mut self, keys: &Keys, wire: &mut Vec<InputEvent>) {
+        let out = self.shortcuts.flush();
+        self.apply(out, false, keys, wire, &mut Vec::new());
+        let last = self.last;
+        let axes = [
+            (gamepad::AXIS_LS_X, last.lx),
+            (gamepad::AXIS_LS_Y, last.ly),
+            (gamepad::AXIS_RS_X, last.rx),
+            (gamepad::AXIS_RS_Y, last.ry),
+            (gamepad::AXIS_LT, i16::from(last.lt)),
+            (gamepad::AXIS_RT, i16::from(last.rt)),
+        ];
+        for (axis, value) in axes {
+            if value != 0 {
+                wire.push(axis_event(axis, 0, last.slot));
+            }
+        }
+    }
+}
+
+/// The dial command a shortcut runs: only those `stream::run_command` acts on.
+fn command(slot: &SlotId) -> Option<RingCommand> {
+    match slot {
+        SlotId::EndStream | SlotId::DisconnectLinger | SlotId::Stats => RingCommand::for_slot(slot),
+        _ => None,
+    }
+}
+
+/// A key combination on the host: every key down in order, up in reverse, or both for a tap.
+fn key_events(vks: &[u8], phase: Phase, wire: &mut Vec<InputEvent>) {
+    let key = |kind, vk: u8| InputEvent {
+        kind,
+        _pad: [0; 3],
+        code: u32::from(vk),
+        x: 0,
+        y: 0,
+        flags: 0,
+    };
+    if phase != Phase::Up {
+        wire.extend(vks.iter().map(|&vk| key(InputKind::KeyDown, vk)));
+    }
+    if phase != Phase::Down {
+        wire.extend(vks.iter().rev().map(|&vk| key(InputKind::KeyUp, vk)));
     }
 }
 
@@ -151,23 +262,28 @@ fn resolve_kind(setting: GamepadType, pad: PadKind) -> GamepadType {
     }
 }
 
+/// One pad's sample against its last: the engine's due tick, its button edges, then the axes.
 fn diff(
-    pad: u8,
     state: &mut Slot,
     now: &PadSample,
+    at: Instant,
     dial_open: bool,
+    keys: &Keys,
     wire: &mut Vec<InputEvent>,
     routed: &mut Vec<Routed>,
 ) {
+    let pad = state.last.slot;
+    let out = state.shortcuts.tick(at);
+    state.apply(out, dial_open, keys, wire, routed);
     let changed = state.last.buttons ^ now.buttons;
     for bit in BUTTONS.into_iter().filter(|b| changed & b != 0) {
-        let down = now.buttons & bit != 0;
-        match state.dial.button(bit, down, dial_open) {
-            PadRoute::Forward => wire.push(bit_event(bit, down, pad)),
-            PadRoute::Drop => {}
-            PadRoute::Open | PadRoute::Menu(MenuEvent::Back) => routed.push(Routed::ToggleDial),
-            PadRoute::Menu(ev) => routed.push(Routed::Dial(ev)),
-        }
+        let ev = if now.buttons & bit != 0 {
+            Event::Press(bit)
+        } else {
+            Event::Release(bit)
+        };
+        let out = state.shortcuts.step(ev, at);
+        state.apply(out, dial_open, keys, wire, routed);
     }
     let axes = [
         (gamepad::AXIS_LS_X, state.last.lx, now.lx),
@@ -203,26 +319,6 @@ fn diff(
         }
     }
     state.last = *now;
-}
-
-/// Releases for everything `last` held: button ups and centred axes.
-fn release_into(pad: u8, last: &PadSample, wire: &mut Vec<InputEvent>) {
-    for bit in BUTTONS.into_iter().filter(|b| last.buttons & b != 0) {
-        wire.push(bit_event(bit, false, pad));
-    }
-    let axes = [
-        (gamepad::AXIS_LS_X, i32::from(last.lx)),
-        (gamepad::AXIS_LS_Y, i32::from(last.ly)),
-        (gamepad::AXIS_RS_X, i32::from(last.rx)),
-        (gamepad::AXIS_RS_Y, i32::from(last.ry)),
-        (gamepad::AXIS_LT, i32::from(last.lt)),
-        (gamepad::AXIS_RT, i32::from(last.rt)),
-    ];
-    for (axis, value) in axes {
-        if value != 0 {
-            wire.push(axis_event(axis, 0, pad));
-        }
-    }
 }
 
 /// The pads folded into the one sample the shared menu synthesizer steps: buttons OR'd, the
@@ -315,6 +411,17 @@ pub fn remove_event(pad: u8) -> InputEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pf_client_core::menu_nav::MenuDir;
+    use pf_client_core::shortcuts::HOLD;
+    use std::time::Duration;
+
+    const TOUCHPAD: u32 = gamepad::BTN_TOUCHPAD;
+    /// `Client::Ps5`'s End stream hold.
+    const EXIT: u32 = gamepad::BTN_LB | gamepad::BTN_RB | gamepad::BTN_START | TOUCHPAD;
+
+    fn router() -> PadRouter {
+        PadRouter::new("", "")
+    }
 
     fn pad(buttons: u32) -> PadSample {
         PadSample {
@@ -332,7 +439,7 @@ mod tests {
 
     #[test]
     fn a_new_pad_arrives_as_a_dualsense_and_presses_go_out_once() {
-        let mut r = PadRouter::default();
+        let mut r = router();
         let t = Instant::now();
         let (wire, _) = step(&mut r, &[pad(0)], t, false);
         assert_eq!(wire.len(), 1);
@@ -345,7 +452,7 @@ mod tests {
 
     #[test]
     fn a_vanished_pad_releases_then_leaves() {
-        let mut r = PadRouter::default();
+        let mut r = router();
         let t = Instant::now();
         step(&mut r, &[pad(gamepad::BTN_A)], t, false);
         let (wire, _) = step(&mut r, &[], t, false);
@@ -353,33 +460,94 @@ mod tests {
     }
 
     #[test]
-    fn touchpad_and_cross_open_the_dial_without_reaching_the_host() {
-        let mut r = PadRouter::default();
+    fn touchpad_and_cross_open_the_dial_and_cross_never_reaches_the_host() {
+        let mut r = router();
         let t = Instant::now();
         step(&mut r, &[pad(0)], t, false);
-        let (wire, _) = step(&mut r, &[pad(MODIFIER)], t, false);
-        assert_eq!(wire, [bit_event(MODIFIER, true, 0)]);
-        let (wire, routed) = step(&mut r, &[pad(MODIFIER | gamepad::BTN_A)], t, false);
+        let (wire, _) = step(&mut r, &[pad(TOUCHPAD)], t, false);
+        assert_eq!(wire, [bit_event(TOUCHPAD, true, 0)]);
+        let (wire, routed) = step(&mut r, &[pad(TOUCHPAD | gamepad::BTN_A)], t, false);
+        assert_eq!(
+            wire,
+            [bit_event(TOUCHPAD, false, 0)],
+            "the host lets go of the touchpad"
+        );
+        assert_eq!(routed, [Routed::ToggleDial]);
+        let (wire, _) = step(&mut r, &[pad(0)], t, true);
+        assert!(wire.is_empty(), "the chord's releases stay local");
+    }
+
+    #[test]
+    fn the_open_dial_takes_presses_and_back_closes_it() {
+        let mut r = router();
+        let t = Instant::now();
+        step(&mut r, &[pad(0)], t, true);
+        let (wire, routed) = step(&mut r, &[pad(gamepad::BTN_DPAD_RIGHT)], t, true);
+        assert!(wire.is_empty());
+        assert_eq!(routed, [Routed::Dial(MenuEvent::Move(MenuDir::Right))]);
+        let (wire, routed) = step(&mut r, &[pad(gamepad::BTN_B)], t, true);
         assert!(wire.is_empty());
         assert_eq!(routed, [Routed::ToggleDial]);
     }
 
     #[test]
-    fn the_chord_fires_once_after_its_hold() {
-        let mut r = PadRouter::default();
+    fn the_exit_chord_ends_the_stream_once_after_its_hold() {
+        let mut r = router();
         let t = Instant::now();
-        step(&mut r, &[pad(CHORD)], t, false);
-        let (_, routed) = step(&mut r, &[pad(CHORD)], t + Duration::from_millis(500), false);
+        let (wire, _) = step(&mut r, &[pad(EXIT)], t, false);
+        assert!(
+            !wire.contains(&bit_event(TOUCHPAD, true, 0)),
+            "the completing press waits"
+        );
+        let (_, routed) = step(&mut r, &[pad(EXIT)], t + Duration::from_millis(500), false);
         assert!(routed.is_empty());
-        let (_, routed) = step(&mut r, &[pad(CHORD)], t + CHORD_HOLD, false);
-        assert_eq!(routed, [Routed::Chord]);
-        let (_, routed) = step(&mut r, &[pad(CHORD)], t + CHORD_HOLD * 2, false);
+        let (wire, routed) = step(&mut r, &[pad(EXIT)], t + HOLD, false);
+        assert_eq!(routed, [Routed::Command(RingCommand::EndStream)]);
+        assert!(
+            wire.contains(&bit_event(gamepad::BTN_START, false, 0)),
+            "the rest of the chord lifts"
+        );
+        assert!(!wire.contains(&bit_event(TOUCHPAD, true, 0)));
+        let (_, routed) = step(&mut r, &[pad(EXIT)], t + HOLD * 2, false);
         assert!(routed.is_empty(), "re-arms only after a release");
     }
 
     #[test]
+    fn a_key_combination_taps_on_the_host_and_an_action_this_console_lacks_is_game_input() {
+        let shortcuts = r#"{"v":1,"bindings":[
+            {"on":"pad","keys":["touchpad","y"],"do":"shortcut:s1"},
+            {"on":"pad","keys":["touchpad","x"],"do":"mic"}]}"#;
+        let ring = r#"{"v":2,"shortcuts":[{"id":"s1","keys":["alt","tab"]}]}"#;
+        let mut r = PadRouter::new(shortcuts, ring);
+        let t = Instant::now();
+        step(&mut r, &[pad(TOUCHPAD)], t, false);
+        let key = |kind, name| InputEvent {
+            kind,
+            _pad: [0; 3],
+            code: u32::from(key_vk(name).unwrap()),
+            x: 0,
+            y: 0,
+            flags: 0,
+        };
+        let (wire, _) = step(&mut r, &[pad(TOUCHPAD | gamepad::BTN_Y)], t, false);
+        assert_eq!(
+            wire,
+            [
+                bit_event(TOUCHPAD, false, 0),
+                key(InputKind::KeyDown, "alt"),
+                key(InputKind::KeyDown, "tab"),
+                key(InputKind::KeyUp, "tab"),
+                key(InputKind::KeyUp, "alt"),
+            ]
+        );
+        let (wire, routed) = step(&mut r, &[pad(TOUCHPAD | gamepad::BTN_X)], t, false);
+        assert_eq!(wire, [bit_event(gamepad::BTN_X, true, 0)], "the console has no mic");
+        assert!(routed.is_empty());
+    }
+
+    #[test]
     fn release_all_centres_sticks_and_lifts_buttons() {
-        let mut r = PadRouter::default();
+        let mut r = router();
         let t = Instant::now();
         let held = PadSample {
             lx: 1000,

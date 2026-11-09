@@ -1,18 +1,16 @@
 //! The in-stream quick-action dial's pad side, in wire bits so it tests without a pad.
 //!
-//! Modifier+A opens the dial (Select on most pads, the touchpad click on a `DualSense` held by
-//! the console, whose Create button the system keeps): A never reaches the host, and neither
-//! does its release. Opening
-//! releases whatever the host still holds, and while the dial is open every press drives it
-//! instead. Buttons still down when it closes stay the dial's until they release, so the B that
-//! closed it never lands in the game.
+//! It sees only the edges the shortcut engine forwards (`runtime::pads`); a shortcut opens it.
+//! Opening releases whatever the host still holds, and while the dial is open every press
+//! drives it instead. Buttons still down when it closes stay the dial's until they release, so
+//! the B that closed it never lands in the game.
 //!
 //! A, B and Y here are labels (`face`): the wire bits stay positional, the dial reads like the
 //! menus do.
 
 use pf_client_core::menu_nav::{ring_sector, MenuDir, MenuEvent};
 use punktfunk_core::input::gamepad::{
-    BTN_A, BTN_B, BTN_BACK, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT, BTN_DPAD_UP, BTN_X, BTN_Y,
+    BTN_A, BTN_B, BTN_DPAD_DOWN, BTN_DPAD_LEFT, BTN_DPAD_RIGHT, BTN_DPAD_UP, BTN_X, BTN_Y,
 };
 
 /// What the stream loop does with one pad button edge.
@@ -22,8 +20,6 @@ pub enum PadRoute {
     Forward,
     /// The dial owns it; send nothing.
     Drop,
-    /// Select+A: open the dial.
-    Open,
     /// The dial is open: feed it this.
     Menu(MenuEvent),
 }
@@ -32,9 +28,7 @@ pub enum PadRoute {
 pub struct PadDial {
     /// The wire bits under the A, B, X and Y labels.
     face: [u32; 4],
-    /// Held with A, opens the dial.
-    modifier: u32,
-    /// Physically down.
+    /// Down, as forwarded.
     held: u32,
     /// Down on the host.
     sent: u32,
@@ -56,19 +50,12 @@ impl PadDial {
     pub fn with_face(face: [u32; 4]) -> Self {
         Self {
             face,
-            modifier: BTN_BACK,
             held: 0,
             sent: 0,
             owned: 0,
             stick: (0, 0),
             sector: None,
         }
-    }
-
-    /// The same dial opened by `modifier`+A instead of Select+A.
-    #[must_use]
-    pub fn with_modifier(self, modifier: u32) -> Self {
-        Self { modifier, ..self }
     }
 
     /// Routes one button edge. `open` is whether the dial is up right now.
@@ -88,10 +75,6 @@ impl PadDial {
             }
             self.owned |= bit;
             return self.menu_for(bit).map_or(PadRoute::Drop, PadRoute::Menu);
-        }
-        if down && bit == self.face[0] && self.held & self.modifier != 0 {
-            self.owned |= bit;
-            return PadRoute::Open;
         }
         if down {
             self.sent |= bit;
@@ -132,7 +115,7 @@ impl PadDial {
 
     /// The pad went away: nothing it held can release any more.
     pub fn clear(&mut self) {
-        *self = Self::with_face(self.face).with_modifier(self.modifier);
+        *self = Self::with_face(self.face);
     }
 
     fn menu_for(&self, bit: u32) -> Option<MenuEvent> {
@@ -155,21 +138,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn select_then_a_opens_and_keeps_both_a_edges() {
+    fn opening_releases_what_the_host_holds_and_keeps_its_releases_local() {
         let mut d = PadDial::default();
-        assert_eq!(d.button(BTN_BACK, true, false), PadRoute::Forward);
-        assert_eq!(d.button(BTN_A, true, false), PadRoute::Open);
-        assert_eq!(d.opened(), BTN_BACK, "the host still holds Select");
-        assert_eq!(d.button(BTN_A, false, true), PadRoute::Drop);
-        assert_eq!(d.button(BTN_BACK, false, true), PadRoute::Drop);
-    }
-
-    #[test]
-    fn a_alone_or_a_first_is_game_input() {
-        let mut d = PadDial::default();
-        assert_eq!(d.button(BTN_A, true, false), PadRoute::Forward);
-        assert_eq!(d.button(BTN_BACK, true, false), PadRoute::Forward);
-        assert_eq!(d.button(BTN_A, false, false), PadRoute::Forward);
+        assert_eq!(d.button(BTN_X, true, false), PadRoute::Forward);
+        assert_eq!(d.opened(), BTN_X, "the host still holds X");
+        assert_eq!(d.button(BTN_X, false, true), PadRoute::Drop);
     }
 
     #[test]

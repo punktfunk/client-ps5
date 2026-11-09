@@ -1247,6 +1247,8 @@ fn to_model(games: &[GameEntry]) -> Vec<LibraryGame> {
             endable: false,
             // Plugin installs ride on the desktop's catalog; this one lists installed titles.
             install: None,
+            // Host per-title settings ride on the desktop's catalog, as `install` does.
+            overrides: None,
         })
         .collect()
 }
