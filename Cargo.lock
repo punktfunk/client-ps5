@@ -1234,6 +1234,7 @@ dependencies = [
  "libc",
  "pf-client-core",
  "pf-ps5-app",
+ "pf-ps5-platform",
  "pf-ps5-sys",
  "punktfunk-core",
  "quinn-udp",

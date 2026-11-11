@@ -176,6 +176,11 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
 - **AudioOut:** user 0xFF, MAIN port, 48 kHz, grains of 256..2048 frames in steps of 256,
   `sceAudioOutOutput` blocks one grain; S16 stereo and 8-channel are hardware-verified.
 - **klog:** `sceKernelDebugOutText(0, line)`; a title's stderr does not reach it.
+- **System fonts:** the SDK has no font library. A sandbox mounts `/preinst/common/font` at
+  `/<word>/common/font`, the word from `sceKernelGetFsSandboxRandomWord`. It holds
+  `SSTJpPro-Regular.otf` (kana, JIS kanji), `DFHEI5-SONY.ttf` (Chinese, GB Hei) and
+  `SCEPS4Yoongd-Medium.otf` (Hangul), which the title hands the kit for what Geist lacks
+  (a 4.03 sandbox listing; shadPS4's PS4 font table). Probe `fonts` lists the directory.
 - **libc traps for std:** `arc4random*` resolve to nothing in a title (bound to the SDK fork's
   `ps5_` versions by the link recipe); `pthread_set_name_np` from inside the new thread hangs it
   (bound to a no-op here); malloc is wrapped onto the platform heap; TLS is emulated

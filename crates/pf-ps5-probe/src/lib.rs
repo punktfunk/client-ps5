@@ -98,6 +98,7 @@ const CHECKS: &[(&str, Check)] = &[
     ("session", session),
     ("display-hdr", display_hdr),
     ("hdr-scanout", hdr_scanout),
+    ("fonts", fonts),
 ];
 
 /// Runs every check in order. Returns how many failed.
@@ -283,6 +284,37 @@ fn display_hdr(_: &Ctx) -> Result<Outcome> {
 #[cfg(not(target_vendor = "sie"))]
 fn display_hdr(_: &Ctx) -> Result<Outcome> {
     Ok(Outcome::Skip("VideoOut is the console's".into()))
+}
+
+/// The system font directories the title reads its CJK faces from, each with its files and
+/// sizes. Fails when none can be listed: Han, kana and Hangul then draw as boxes.
+#[cfg(target_vendor = "sie")]
+fn fonts(_: &Ctx) -> Result<Outcome> {
+    let dirs = pf_ps5_platform::fonts::dirs(pf_ps5_sys::kernel::sandbox_word().as_deref());
+    let listed: Vec<String> = dirs
+        .iter()
+        .filter_map(|dir| {
+            let mut files: Vec<String> = std::fs::read_dir(dir)
+                .ok()?
+                .flatten()
+                .map(|e| {
+                    let kib = e.metadata().map_or(0, |m| m.len() / 1024);
+                    format!("{} {kib} KiB", e.file_name().to_string_lossy())
+                })
+                .collect();
+            files.sort();
+            Some(format!("{}: {}", dir.display(), files.join(", ")))
+        })
+        .collect();
+    if listed.is_empty() {
+        bail!("none of {dirs:?} lists");
+    }
+    ok(listed.join("; "))
+}
+
+#[cfg(not(target_vendor = "sie"))]
+fn fonts(_: &Ctx) -> Result<Outcome> {
+    Ok(Outcome::Skip("the system fonts are the console's".into()))
 }
 
 /// `VideoOut` takes buffers in the HDR10 pixel format and flips them: four solid PQ fills, 8 s each,
