@@ -3,7 +3,8 @@
 //! Three implementations exist: the console (`pf-ps5-platform`), a developer box
 //! (`pf-ps5-host`) and [`fake`] for tests. The binary builds one [`Platform`] and hands it to
 //! [`crate::run`]; nothing in this crate names a console API, a Vulkan handle or a file path
-//! outside [`Storage::data_dir`]. The contract tests in `tests/seams.rs` are the spec.
+//! outside [`Storage::data_dir`] and [`DeviceInfo::fonts`]. The contract tests in
+//! `tests/seams.rs` are the spec.
 
 pub mod fake;
 
@@ -43,6 +44,9 @@ pub struct DeviceInfo {
     pub ui: String,
     /// The system's languages as BCP-47 tags, most preferred first. Empty reads English.
     pub languages: Vec<String>,
+    /// The system's font files for what Geist lacks (Han, kana, Hangul), most fitting first.
+    /// Empty where Skia has a font manager to ask instead.
+    pub fonts: Vec<std::path::PathBuf>,
 }
 
 /// Refresh rate of the scan-out, in millihertz (59 940, 119 880).

@@ -1,4 +1,4 @@
-//! libkernel: direct memory (Videodec2's buffers), flexible memory, the kernel log.
+//! libkernel: direct memory (Videodec2's buffers), flexible memory, the kernel log, the sandbox.
 
 use core::ffi::{c_char, c_void};
 
@@ -87,6 +87,21 @@ pub fn set_thread_affinity(mask: u64) -> Result<(), i32> {
     }
 }
 
+/// The directory a title's sandbox mounts the system's shared files under (`/<word>/common`),
+/// or `None` where the call names none.
+#[cfg(target_vendor = "sie")]
+pub fn sandbox_word() -> Option<String> {
+    // SAFETY: takes nothing; returns null or a NUL-terminated string libkernel owns for the
+    // process's life.
+    let word = unsafe { sceKernelGetFsSandboxRandomWord() };
+    if word.is_null() {
+        return None;
+    }
+    // SAFETY: non-null, and NUL-terminated by the contract above.
+    let word = unsafe { core::ffi::CStr::from_ptr(word) };
+    Some(word.to_string_lossy().into_owned())
+}
+
 /// Rounds `len` up to [`PAGE`].
 pub const fn page_align(len: usize) -> usize {
     (len + PAGE - 1) & !(PAGE - 1)
@@ -123,4 +138,6 @@ extern "C" {
     /// One line to the kernel log (klog, TCP 3232). Append the newline yourself.
     pub fn sceKernelDebugOutText(channel: i32, text: *const c_char) -> i32;
     pub fn sceKernelUsleep(micros: u32) -> i32;
+    /// The sandbox's ten-character directory name; see [`sandbox_word`].
+    pub fn sceKernelGetFsSandboxRandomWord() -> *const c_char;
 }

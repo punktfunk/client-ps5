@@ -70,7 +70,11 @@ pub(super) fn run(app: &mut App, notice: Option<String>) -> Result<UiOutcome> {
             .selected_row()
             .map_or(ConsoleEntry::Home, |row| ConsoleEntry::Library(Box::new(row))),
     };
-    let mut console = Console::new(opts, entry, &handles).context("console shell")?;
+    let faces = super::system_faces(&app.device.fonts);
+    let faces: Vec<&[u8]> = faces.iter().map(Vec::as_slice).collect();
+    let mut console = Console::new(opts, entry, &handles)
+        .and_then(|console| console.with_fallback_fonts(&faces))
+        .context("console shell")?;
     let viewport = {
         let (w, h) = app.display.ui_size();
         Viewport::plain(w, h)
