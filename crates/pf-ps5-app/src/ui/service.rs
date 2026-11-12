@@ -21,6 +21,7 @@ use pf_console_ui::{
     SpeedPhase, Stale, WakeStatus,
 };
 use punktfunk_core::client::NativeClient;
+use punktfunk_core::PunktfunkError;
 
 use crate::core::model::{GameEntry, KnownHost};
 use crate::services::discovery::{DiscoveredHost, Discovery};
@@ -347,7 +348,7 @@ impl Service {
                     .map_err(|e| crate::core::errors::pair_message(&e))
             }),
             // The host parks this console until its operator approves it, held to the advertised
-            // fingerprint. Never streams.
+            // fingerprint. Never streams. The console offers a request only for a row with one.
             ConsoleCmd::RequestAccess {
                 addr,
                 port,
@@ -357,6 +358,10 @@ impl Service {
             } => {
                 let pin = shared::parse_fp(&fp_hex);
                 self.start_pair(addr, port, req, move |addr, port, id| {
+                    let Some(pin) = pin else {
+                        let e = PunktfunkError::InvalidArg("fingerprint");
+                        return Err(crate::core::errors::access_message(&e));
+                    };
                     NativeClient::request_access(addr, port, (&id.0, &id.1), pin, &device_name, budget::HOST_WAIT, None)
                         .map_err(|e| crate::core::errors::access_message(&e))
                 });
