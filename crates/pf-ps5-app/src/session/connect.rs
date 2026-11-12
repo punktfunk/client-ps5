@@ -10,6 +10,7 @@ use anyhow::{Context, Result};
 use punktfunk_core::client::NativeClient;
 use punktfunk_core::config::{CompositorPref, Mode};
 use punktfunk_core::quic;
+use punktfunk_core::quic::v2::hello::ScreenWish;
 
 use crate::core::caps::video_caps;
 use crate::services::join::{join_with_timeout, SHUTDOWN_JOIN_TIMEOUT};
@@ -115,6 +116,8 @@ pub struct ConnectParams {
     pub present_priority: pf_client_core::trust::PresentPriority,
     /// The host profile to play as; `None` lets the host choose.
     pub profile: Option<String>,
+    /// The host screen the resolved preset asks for; `None` leaves it to the host.
+    pub screen_wish: Option<ScreenWish>,
 }
 
 /// One `quic::CODEC_*` bit, or 0 where the preference names no single codec.
@@ -236,6 +239,7 @@ fn dial(params: &ConnectParams, negotiated: &Negotiated) -> Result<NativeClient>
         pin: params.pin,
         identity: Some(params.identity.clone()),
         profile: params.profile.clone(),
+        screen_wish: params.screen_wish.clone(),
         // Uncancelable: the connect has its own thread and the caller joins it.
         ..punktfunk_core::client::ConnectParams::new(&params.host, params.port, negotiated.mode, params.timeout)
     })

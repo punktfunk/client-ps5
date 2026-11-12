@@ -1,5 +1,5 @@
-//! The stream: the picture on the display's stream layer, the dial and the stats over it, and
-//! the pads on an input thread of their own.
+//! The stream: the picture on the display's stream layer, the dial, the stats and the start line
+//! over it, and the pads on an input thread of their own.
 //!
 //! The main thread presents at the display's rate. The input thread polls the pads at 250 Hz,
 //! sends their input straight to the host, applies the host's rumble and trigger feedback,
@@ -14,9 +14,10 @@ use pf_client_core::ring::{RingCommand, RingFacts, RingInput};
 use pf_console_ui::theme;
 use punktfunk_core::client::PunktfunkEndReason;
 use punktfunk_core::hud::StatsVerbosity;
+use punktfunk_core::quic::v2::hello::{ScreenEcho, ScreenWish};
 
 use super::connect::{self, ConnectOutcome};
-use super::hud::StatsOverlay;
+use super::hud::{self, StatsOverlay};
 use super::pads::{PadRouter, Routed};
 use super::testrun::Scenario;
 use super::{App, StreamOutcome};
@@ -290,6 +291,13 @@ fn stream(
     let scale = (height as f32 / 800.0).clamp(0.75, 3.0);
     app.display.set_stream(true, Fit::Contain);
 
+    let client = connected.client();
+    let notice = hud::screen_line(
+        client.screen() == Some(&ScreenEcho::Shared),
+        ScreenWish::parse(&settings.host_screen).as_ref(),
+        client.role(),
+    );
+
     let started = Instant::now();
     let mut last_elapsed = Duration::ZERO;
     let mut dial_was_open = false;
@@ -343,6 +351,9 @@ fn stream(
         let result = app.display.frame(&mut |canvas| {
             if let Some(fonts) = &fonts {
                 hud.draw(canvas, fonts, scale);
+                if let Some(text) = notice.as_deref().filter(|_| started.elapsed() < hud::NOTICE_FOR) {
+                    hud::draw_notice(canvas, fonts, text, (width, height), scale);
+                }
                 ring.render(canvas, &ui, width, height, scale, fonts, dt);
             }
         });
