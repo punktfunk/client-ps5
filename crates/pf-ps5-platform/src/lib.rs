@@ -4,6 +4,7 @@
 //! calls the console is `cfg(target_vendor = "sie")`. The binary calls [`platform`] once and
 //! hands the result to `pf_ps5_app::run`.
 
+pub mod fonts;
 pub mod language;
 pub mod pad_map;
 pub mod triggers;

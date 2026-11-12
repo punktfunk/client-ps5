@@ -157,6 +157,17 @@ fn system_languages() -> Vec<String> {
     tags
 }
 
+/// The console's CJK font files for the kit, by the system language, from the first font
+/// directory that exists. Reports to the kernel log, since logging does not exist yet.
+fn system_fonts(language: Option<&str>) -> Vec<PathBuf> {
+    use std::io::Write as _;
+    let dirs = crate::fonts::dirs(pf_ps5_sys::kernel::sandbox_word().as_deref());
+    let found = dirs.iter().find(|d| d.is_dir());
+    let line = found.map_or_else(|| format!("none of {dirs:?}"), |d| d.display().to_string());
+    let _ = writeln!(klog::Klog::default(), "punktfunk-ps5: fonts: {line}");
+    found.map(|d| crate::fonts::faces(d, language)).unwrap_or_default()
+}
+
 /// The data directory and the kernel log, for the probe, which needs nothing else.
 pub fn probe_parts() -> (PathBuf, Box<dyn std::io::Write + Send>) {
     (storage().0, Box::new(klog::Klog::default()))
@@ -176,6 +187,7 @@ pub fn platform() -> Result<Platform> {
     let dev = Arc::new(GpuDevice::new(entry(), Target::Display).context("bring up the GPU")?);
     let slot = Arc::new(VideoSlot::default());
     let presenter = Presenter::new(dev.clone(), slot.clone()).context("bring up the display")?;
+    let languages = system_languages();
     let device = DeviceInfo {
         platform: "ps5",
         model: "PlayStation 5".into(),
@@ -183,7 +195,8 @@ pub fn platform() -> Result<Platform> {
             .map_or_else(String::new, |v| format!("{:x}.{:02x}", v >> 24, (v >> 16) & 0xff)),
         gpu: format!("{} (mesa {MESA_PIN})", dev.name),
         ui: presenter.ui(),
-        languages: system_languages(),
+        fonts: system_fonts(languages.first().map(String::as_str)),
+        languages,
     };
     Ok(Platform {
         display: Box::new(presenter),

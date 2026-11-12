@@ -318,6 +318,8 @@ impl Service {
             game_presets: h.game_presets.clone(),
             profile: h.profile.clone(),
             running: String::new(),
+            // Never fetched: this client offers no screen pick.
+            screens: None,
             key,
         }
     }
@@ -427,8 +429,8 @@ impl Service {
             ConsoleCmd::SetPin { key, preset_id, pin } => self.set_pin(&key, preset_id, pin),
             ConsoleCmd::PadTest { on } => self.pad_test = on,
             // Nothing to do: no status client (Resume badges stay off), no clipboard, no prompt
-            // here, no title is endable or installable (`to_model`), and the profile picker is
-            // off (`ConsoleOptions::profiles`).
+            // here, no title is endable or installable (`to_model`), the profile picker is off
+            // (`ConsoleOptions::profiles`), and no row carries `screens`.
             ConsoleCmd::RefreshRunning { .. }
             | ConsoleCmd::SetClipboard { .. }
             | ConsoleCmd::PromptAnswer { .. }
@@ -437,7 +439,8 @@ impl Service {
             | ConsoleCmd::FetchProfiles { .. }
             | ConsoleCmd::FetchAvatar { .. }
             | ConsoleCmd::WakeProfile { .. }
-            | ConsoleCmd::SetProfile { .. } => {}
+            | ConsoleCmd::SetProfile { .. }
+            | ConsoleCmd::SetScreen { .. } => {}
         }
     }
 
@@ -1203,6 +1206,7 @@ fn discovered_row(d: &DiscoveredHost) -> HostRow {
         // Needs `/api/v1/status`, which this client does not ask — the same reason
         // `LibraryGame::running` is false here. Empty renders as no line.
         running: String::new(),
+        screens: None,
     }
 }
 

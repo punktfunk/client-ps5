@@ -249,7 +249,9 @@ fn stream(
     };
     let router = PadRouter::new(&settings.shortcuts, &settings.overlay_actions);
     let input = InputThread::start(pads, connected.input(), settings.gamepad_type(), router);
-    let fonts = match pf_console_ui::theme::build_fonts() {
+    let faces = super::system_faces(&app.device.fonts);
+    let faces: Vec<&[u8]> = faces.iter().map(Vec::as_slice).collect();
+    let fonts = match pf_console_ui::theme::build_fonts_with(&faces) {
         Ok(f) => Some(f),
         Err(e) => {
             tracing::warn!("overlay fonts: {e:#}");

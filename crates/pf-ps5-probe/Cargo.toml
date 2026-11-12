@@ -16,6 +16,7 @@ punktfunk-core.workspace = true
 pf-client-core.workspace = true
 pf-ps5-app = { path = "../pf-ps5-app" }
 pf-ps5-sys = { path = "../pf-ps5-sys" }
+pf-ps5-platform = { path = "../pf-ps5-platform" }
 quinn-udp = "0.5"
 tokio = { version = "1", features = ["rt-multi-thread", "time", "net"] }
 libc = "0.2"

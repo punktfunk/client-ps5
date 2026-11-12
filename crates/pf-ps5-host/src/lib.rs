@@ -304,6 +304,7 @@ pub fn platform(opts: &Options) -> Result<Platform> {
             gpu,
             ui,
             languages: Vec::new(),
+            fonts: Vec::new(),
         },
     })
 }

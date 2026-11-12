@@ -157,6 +157,38 @@ fn alternate(app: &mut App) -> Option<ExitPlan> {
     }
 }
 
+/// The system's font files ([`crate::platform::DeviceInfo::fonts`]) as faces for the kit's
+/// fallback. A file that is missing or not a face is logged and left out: the kit refuses all
+/// faces for one bad one.
+fn system_faces(paths: &[std::path::PathBuf]) -> Vec<Vec<u8>> {
+    let started = std::time::Instant::now();
+    let mgr = skia_safe::FontMgr::new();
+    let faces: Vec<Vec<u8>> = paths
+        .iter()
+        .filter_map(|path| match std::fs::read(path) {
+            Ok(bytes) if mgr.new_from_data(skia_safe::Data::new_copy(&bytes), None).is_some() => Some(bytes),
+            Ok(_) => {
+                tracing::warn!(path = %path.display(), "system font is not a face");
+                None
+            }
+            Err(e) => {
+                tracing::warn!(path = %path.display(), error = %e, "system font unreadable");
+                None
+            }
+        })
+        .collect();
+    if !paths.is_empty() {
+        tracing::info!(
+            "fonts: {} of {} system faces, {} KiB, in {} ms",
+            faces.len(),
+            paths.len(),
+            faces.iter().map(Vec::len).sum::<usize>() / 1024,
+            started.elapsed().as_millis()
+        );
+    }
+    faces
+}
+
 /// A panic on any thread goes to the log with its frames, then the process aborts.
 fn install_panic_hook() {
     std::panic::set_hook(Box::new(|info| {
@@ -173,4 +205,17 @@ fn install_panic_hook() {
 fn teardown(connected: session::Connected) {
     connected.disconnect_quit();
     connected.shutdown_and_quit();
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_missing_or_foreign_file_is_no_face() {
+        let dir = std::env::temp_dir().join(format!("pf-faces-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let text = dir.join("not-a-font.otf");
+        std::fs::write(&text, b"not a font").unwrap();
+        assert!(super::system_faces(&[text, dir.join("missing.ttf")]).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

@@ -52,6 +52,14 @@ mod tests {
     }
 
     #[test]
+    fn chinese_japanese_and_korean_carry_their_script() {
+        assert_eq!(tag(0), Some("ja"));
+        assert_eq!(tag(9), Some("ko"));
+        assert_eq!(tag(10), Some("zh-Hant"));
+        assert_eq!(tag(11), Some("zh-Hans"));
+    }
+
+    #[test]
     fn an_unknown_value_is_no_language() {
         assert_eq!(tag(-1), None);
         assert_eq!(tag(30), None);
