@@ -8,5 +8,6 @@ pub mod logs;
 pub mod paths;
 pub mod pinned_tls;
 pub mod power;
+pub mod screens;
 pub mod store;
 pub mod wol;

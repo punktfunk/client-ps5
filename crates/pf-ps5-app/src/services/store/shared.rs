@@ -377,4 +377,28 @@ mod launch_tests {
             "a dangling title binding falls back to the host default"
         );
     }
+
+    /// A preset's host screen survives the document and is what the launch asks for; the
+    /// global document holds none.
+    #[test]
+    fn a_presets_host_screen_reaches_the_launch() {
+        use punktfunk_core::quic::v2::hello::ScreenWish;
+        let mut profile = StreamPreset::new("Couch");
+        profile.overrides.host_screen = Some("second".into());
+        let pid = profile.id.clone();
+        let state = state_with(profile, |h| h.preset_id = Some(pid));
+        let json = serde_json::to_value(&state).unwrap();
+        assert_eq!(json["profiles"][0]["overrides"]["host_screen"], "second");
+        assert!(json["settings"].get("host_screen").is_none());
+        let back: Persisted = serde_json::from_value(json).unwrap();
+
+        let wish = |launch| ScreenWish::parse(&launch_settings(&back, "10.0.0.2", 47989, launch, None).host_screen);
+        assert_eq!(wish(None), Some(ScreenWish::Second));
+        assert_eq!(
+            wish(Some("doom")),
+            Some(ScreenWish::Second),
+            "a title without its own preset"
+        );
+        assert_eq!(ScreenWish::parse(&back.settings.host_screen), None);
+    }
 }
