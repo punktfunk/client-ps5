@@ -41,6 +41,7 @@ pub(super) fn run(app: &mut App, notice: Option<String>) -> Result<UiOutcome> {
     let caps = crate::core::caps::video_caps();
     let opts = ConsoleOptions {
         device_name: "PlayStation 5".into(),
+        device_code: pf_client_core::trust::device_code(&app.identity),
         version: Some(crate::core::build_id()),
         system_keyboard: false,
         tv: true,
