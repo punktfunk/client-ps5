@@ -1,6 +1,7 @@
-# A version tag builds the title and attaches the zip, its checksum and the unstripped ELF (for
-# symbolize.py) to a GitHub release. Binaries ship under MIT OR Apache-2.0 (plan D10), so the
-# tag fails while the link still takes a GPL-3.0-or-later piece (plan WP6).
+# A version tag builds the title as CI's console job does and attaches the zip, its checksum and
+# the unstripped ELF (for symbolize.py) to a GitHub pre-release. The binary links
+# GPL-3.0-or-later pieces, so it is GPL-3.0-or-later and its zip carries the license text
+# (docs/pins.md). Promote the release by hand once a tester has run it on a console.
 name: release
 
 on:
@@ -15,26 +16,25 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - name: No GPL pieces in the link
-        run: |
-          if grep -n -E 'app_crt\.cpp|app_cpp_runtime\.cpp|radv_link_recipe|runtime/libc\.prx' scripts/link-title.sh; then
-            echo "link-title.sh still links GPL-3.0-or-later code; plan WP6 replaces it first" >&2
-            exit 1
-          fi
       - name: Toolchain image
         run: docker build -t punktfunk-ps5-toolchain:1 -f docker/Dockerfile docker
+      - uses: actions/cache@v4
+        with:
+          path: .toolchains
+          key: toolchains-${{ hashFiles('scripts/pins.env') }}
       - name: Package
         run: |
-          docker run -d --name ps5 -v "$PWD:/w" -w /w -e TITLE_ID -e PKG_VERSION punktfunk-ps5-toolchain:1 sleep infinity
+          docker run -d --name ps5 -v "$PWD:/w" -w /w -e TITLE_ID=PPSA99724 -e PKG_VERSION="${GITHUB_REF_NAME#v}" punktfunk-ps5-toolchain:1 sleep infinity
           docker exec ps5 task toolchain
           docker exec ps5 task skia
           docker exec ps5 task package
-        env:
-          TITLE_ID: ${{ vars.TITLE_ID }}
-          PKG_VERSION: ${{ github.ref_name }}
       - uses: softprops/action-gh-release@v2
         with:
+          prerelease: true
+          body: |
+            Install: [`docs/tester.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/tester.md), with `PPSA99724.zip` as the build.
+
+            The source is MIT OR Apache-2.0. This binary links GPL-3.0-or-later code from PS5_Vulkan and PS5_PayloadSDK, so the binary is GPL-3.0-or-later: `COPYING` and the notices are in the zip. Its source is this repository at this tag and the revisions [`scripts/pins.env`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/scripts/pins.env) names.
           files: |
             dist/*.zip
             dist/*.zip.sha256

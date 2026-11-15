@@ -20,7 +20,7 @@ host to a PS5, built on the upstream `punktfunk-core` crate (a pinned git depend
 platform, Videodec2, a Vulkan presenter on a statically linked RADV, and the title packaging.
 
 > **Experimental.** It streams on a tester's PS5 (firmware 13.42); `docs/NOTES.md` lists what each
-> round proved. Builds go to testers, not to a release page.
+> round proved. A release stays a pre-release until a tester has run that build.
 
 ## Features
 
@@ -35,10 +35,11 @@ What it is built to do:
 Not yet: surround sound, DualSense haptics, keyboard and mouse, VRR, and host names (enter an IP
 address).
 
-## Test it on a console
+## Install it on a console
 
+Download `PPSA99724.zip` from the [releases](https://github.com/punktfunk/client-ps5/releases).
 [`docs/tester.md`](docs/tester.md) is the whole manual: what the console needs, then one task per
-step.
+step, with that zip as the build.
 
 ## Build it
 
@@ -97,7 +98,8 @@ This project uses AI for writing code. The rules the agents follow are in [AGENT
 
 ## Licence
 
-MIT OR Apache-2.0, at your option ([`LICENSE-MIT`](LICENSE-MIT),
-[`LICENSE-APACHE`](LICENSE-APACHE)). Test builds also link three GPL-3.0-or-later pieces from
-PS5_Vulkan and its payload SDK fork, so they are not published. They are replaced before the
-first release ([`docs/pins.md`](docs/pins.md)). The build writes `THIRD-PARTY-NOTICES.txt`.
+The source is MIT OR Apache-2.0, at your option ([`LICENSE-MIT`](LICENSE-MIT),
+[`LICENSE-APACHE`](LICENSE-APACHE)). A built title links three GPL-3.0-or-later pieces from
+PS5_Vulkan and its payload SDK fork, so the binary is GPL-3.0-or-later
+([`packaging/COPYING`](packaging/COPYING)); [`docs/pins.md`](docs/pins.md) names the source of
+each piece. The build writes `THIRD-PARTY-NOTICES.txt`.

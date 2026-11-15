@@ -16,7 +16,8 @@ A bump changes `scripts/pins.env` (and `rust-toolchain.toml` / `Cargo.toml` for 
 then runs the probe and WP1's bundle before anything else ships. The About screen and the first log
 line carry the build id with the core and Mesa pins.
 
-Releases ship under `MIT OR Apache-2.0` (plan D10). Until WP6 replaces them, test builds link
-three GPL-3.0-or-later pieces from the two rows above: `app_crt.cpp` / `app_cpp_runtime.cpp`,
-`libps5platform.a` and the generated `libc.prx`. Such a build is never published. RADV and PyroWave
-are MIT, Skia BSD-3-Clause, libc++ Apache-2.0 with the LLVM exception.
+The source is `MIT OR Apache-2.0`. Every build links three GPL-3.0-or-later pieces from the
+PS5_Vulkan and PS5_PayloadSDK rows: `app_crt.cpp` / `app_cpp_runtime.cpp`, `libps5platform.a` and
+the generated `libc.prx`. That makes the binary GPL-3.0-or-later (plan D10): its zip carries
+`COPYING` and the notices, and this table at a release's tag names the source of each linked
+piece. RADV and PyroWave are MIT, Skia BSD-3-Clause, libc++ Apache-2.0 with the LLVM exception.
