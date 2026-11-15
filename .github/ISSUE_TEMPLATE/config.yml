@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Install guide
+    url: https://github.com/punktfunk/client-ps5/blob/main/docs/install.md
+    about: Installing, updating and the common problems
+  - name: Discord
+    url: https://discord.gg/wzEGg9y45z
+    about: Questions and help with your setup

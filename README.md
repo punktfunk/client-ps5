@@ -6,6 +6,8 @@
 <br>
 
 [![CI](https://github.com/punktfunk/client-ps5/actions/workflows/ci.yml/badge.svg)](https://github.com/punktfunk/client-ps5/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/punktfunk/client-ps5?include_prereleases&color=6c5bf3&label=release)](https://github.com/punktfunk/client-ps5/releases)
+[![Downloads](https://img.shields.io/github/downloads/punktfunk/client-ps5/total?color=a79ff8&label=downloads)](https://github.com/punktfunk/client-ps5/releases)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-d2c9fb)](#licence)
 
 **Native PlayStation 5 client for [Punktfunk](https://git.unom.io/unom/punktfunk) — low-latency desktop & game streaming.**
@@ -19,8 +21,8 @@ host to a PS5, built on the upstream `punktfunk-core` crate (a pinned git depend
 `Cargo.toml`) and the shared console UI. This repo is only the PS5-specific client: the console's
 platform, Videodec2, a Vulkan presenter on a statically linked RADV, and the title packaging.
 
-> **Experimental.** It streams on a tester's PS5 (firmware 13.42); `docs/NOTES.md` lists what each
-> round proved. A release stays a pre-release until a tester has run that build.
+> **Early release.** It streams on a tester's PS5 (firmware 13.42); other firmwares, loaders and
+> TVs are untested. A release stays a pre-release until a tester has run that build.
 
 ## Features
 
@@ -37,9 +39,28 @@ address).
 
 ## Install it on a console
 
-Download `PPSA99724.zip` from the [releases](https://github.com/punktfunk/client-ps5/releases).
-[`docs/tester.md`](docs/tester.md) is the whole manual: what the console needs, then one task per
-step, with that zip as the build.
+You need a PS5 that already runs homebrew, with a title loader that registers folders in
+`/data/homebrew` and an FTP server, and a [Punktfunk host](https://docs.punktfunk.unom.io/docs/install)
+on the same network.
+
+1. Download `PPSA99724.zip` from the [latest release](https://github.com/punktfunk/client-ps5/releases)
+   and extract it.
+2. Upload the whole `PPSA99724` folder to `/data/homebrew/` over FTP.
+3. Wait for your title loader to put **Punktfunk** on the home screen, then launch it and pair
+   your host.
+
+[`docs/install.md`](docs/install.md) is the full guide: the first stream, updating, removing, and
+what to do when something goes wrong.
+
+In a stream, hold the touchpad click and press Cross for the quick menu. Hold L1 + R1 + Options +
+touchpad click for one second to end the stream.
+
+## Help and feedback
+
+Reports from other firmwares, loaders and TVs are what this client needs most.
+[Open an issue](https://github.com/punktfunk/client-ps5/issues) or ask on
+[Discord](https://discord.gg/wzEGg9y45z);
+[`docs/install.md`](docs/install.md#report-a-problem) lists what to include.
 
 ## Build it
 
@@ -86,7 +107,8 @@ Read [`AGENTS.md`](AGENTS.md) before changing code: layering, commands and invar
 
 ## Docs
 
-- [`docs/tester.md`](docs/tester.md): testing on a console.
+- [`docs/install.md`](docs/install.md): installing, updating and troubleshooting.
+- [`docs/tester.md`](docs/tester.md): the scripted test rounds on a console.
 - [`docs/NOTES.md`](docs/NOTES.md): what is proven, what still needs a console, and the console
   facts the code relies on.
 - [`docs/plan.md`](docs/plan.md): the plan of record.
@@ -103,3 +125,9 @@ The source is MIT OR Apache-2.0, at your option ([`LICENSE-MIT`](LICENSE-MIT),
 PS5_Vulkan and its payload SDK fork, so the binary is GPL-3.0-or-later
 ([`packaging/COPYING`](packaging/COPYING)); [`docs/pins.md`](docs/pins.md) names the source of
 each piece. The build writes `THIRD-PARTY-NOTICES.txt`.
+
+## Disclaimer
+
+An independent homebrew project, not affiliated with or endorsed by Sony Interactive
+Entertainment. It needs a console that already runs homebrew and ships no exploit, loader, Sony
+SDK, firmware or keys. Use it at your own risk.

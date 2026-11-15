@@ -1,0 +1,48 @@
+name: Report a problem
+description: Something does not work on your console
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected and what you saw. Add the time it happened.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Punktfunk version on the console
+      description: Settings → About
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Console firmware
+      placeholder: "13.42"
+    validations:
+      required: true
+  - type: input
+    id: loader
+    attributes:
+      label: Title loader and its version
+      placeholder: ShadowMountPlus 1.6
+  - type: input
+    id: host
+    attributes:
+      label: Host
+      description: Punktfunk version, operating system and graphics card
+  - type: input
+    id: setup
+    attributes:
+      label: TV and network
+      description: The TV model, and whether the console is on a cable or Wi-Fi
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: >-
+        On the host's card choose "Send logs to host", then download the log from the Logs page
+        of the host's web console. Read it before you attach it: it names your hosts and their
+        addresses.

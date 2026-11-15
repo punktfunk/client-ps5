@@ -75,14 +75,14 @@ tasks:
     desc: Link and lay out dist/<TITLE_ID>/ (eboot.bin, sce_sys, sce_module) and its zip, license text beside the folder
     deps: [build]
     cmds:
-      - bash scripts/link-title.sh target/x86_64-sie-ps5/release/libpf_ps5_title.a {{.TITLE_ID}} punktfunk
+      - bash scripts/link-title.sh target/x86_64-sie-ps5/release/libpf_ps5_title.a {{.TITLE_ID}} Punktfunk
       - cd dist && cp ../packaging/COPYING ../THIRD-PARTY-NOTICES.txt . && zip -qr {{.TITLE_ID}}.zip {{.TITLE_ID}} COPYING THIRD-PARTY-NOTICES.txt && sha256sum {{.TITLE_ID}}.zip > {{.TITLE_ID}}.zip.sha256
 
   package-probe:
     desc: The probe as its own title (TITLE_ID_PROBE, default PPSA99725)
     cmds:
       - bash scripts/cargo-ps5.sh build --probe
-      - bash scripts/link-title.sh target/x86_64-sie-ps5/release/libpf_ps5_title.a {{.PROBE_ID}} "punktfunk probe"
+      - bash scripts/link-title.sh target/x86_64-sie-ps5/release/libpf_ps5_title.a {{.PROBE_ID}} "Punktfunk Probe"
       - cd dist && cp ../packaging/COPYING ../THIRD-PARTY-NOTICES.txt . && zip -qr {{.PROBE_ID}}.zip {{.PROBE_ID}} COPYING THIRD-PARTY-NOTICES.txt && sha256sum {{.PROBE_ID}}.zip > {{.PROBE_ID}}.zip.sha256
 
   unpack:

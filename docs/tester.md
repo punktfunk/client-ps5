@@ -1,8 +1,9 @@
-# Testing punktfunk on a PS5
+# Testing Punktfunk on a PS5
 
-This page takes you from a fresh clone to the logs the developer needs. You run a few tasks on
-your computer; the developer reads what they bring back. Nothing has run on a console yet, so
-expect failures: a failure with its log is a good result.
+To install and use Punktfunk, read [`install.md`](install.md). This page is for test rounds with
+the developer: it takes you from a fresh clone to the logs the developer needs. You run a few
+tasks on your computer; the developer reads what they bring back. A failure with its log is a
+good result.
 
 ## What you need
 
@@ -13,10 +14,10 @@ expect failures: a failure with its log is a good result.
 - **A computer** on the same network with [Python 3](https://www.python.org/downloads/),
   [Task](https://taskfile.dev/installation/) and this repository. The live log and `task klog`
   need `nc`, which macOS and Linux have.
-- **A punktfunk host** on the same network ([install it](https://docs.punktfunk.unom.io/docs/install))
+- **A Punktfunk host** on the same network ([install it](https://docs.punktfunk.unom.io/docs/install))
   and its IP address. Use a cable for the console and the host in the stream rounds.
-- **The build:** a release's `PPSA99724.zip`, which holds **punktfunk**, or `title.zip` from
-  the developer, which also holds **punktfunk probe** (PPSA99725).
+- **The build:** a release's `PPSA99724.zip`, which holds **Punktfunk**, or `title.zip` from
+  the developer, which also holds **Punktfunk Probe** (PPSA99725).
 
 ## Set up once
 
@@ -51,14 +52,14 @@ itself. It runs twice: the second launch checks that its files and its pairing s
    task probe-host -- 192.168.1.20 1234
    ```
 
-4. Launch **punktfunk probe** from the home screen and leave it alone until it closes.
+4. Launch **Punktfunk Probe** from the home screen and leave it alone until it closes.
 5. Fetch its log. It prints one line: `ok: …`, `FAILED (…): …` or `STOPPED in …`.
 
    ```sh
    task probe-fetch
    ```
 
-6. Launch **punktfunk probe** again, wait until it closes, and run `task probe-fetch` again.
+6. Launch **Punktfunk Probe** again, wait until it closes, and run `task probe-fetch` again.
 
 Send both printed lines and the files in `bundles/PPSA99725/`. With this first report, also
 tell the developer your console model, firmware, title loader and its version, the display and
@@ -73,7 +74,7 @@ its highest refresh rate, and whether the console is on a cable or Wi-Fi.
    task test-run -- menu
    ```
 
-2. Launch **punktfunk** and leave the controller alone. It draws its menu, saves pictures of it
+2. Launch **Punktfunk** and leave the controller alone. It draws its menu, saves pictures of it
    and closes itself.
 3. Fetch the result. Send the line it prints and the folder it names.
 
@@ -83,14 +84,14 @@ its highest refresh rate, and whether the console is on a cable or Wi-Fi.
 
 ## Round 3: pair and stream
 
-1. Launch **punktfunk**. If your host is not listed, choose **Add host** and enter its IP
+1. Launch **Punktfunk**. If your host is not listed, choose **Add host** and enter its IP
    address. Host names don't work on the console.
 2. Pick the host and pair it. Either choose **Request access — approve on the host** and click
    **Approve** under **Devices** in the host's web console, or type a PIN from **Pair a device**
    into **PIN** and choose **Pair**. The [pairing guide](https://docs.punktfunk.unom.io/docs/pairing)
    shows the host's side.
 3. Go back to the home screen and choose **Quit**. The hint bar names the button.
-4. Queue a stream to your host for 60 seconds, launch **punktfunk** and leave the controller
+4. Queue a stream to your host for 60 seconds, launch **Punktfunk** and leave the controller
    alone until it closes:
 
    ```sh

@@ -32,7 +32,7 @@ jobs:
         with:
           prerelease: true
           body: |
-            Install: [`docs/tester.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/tester.md), with `PPSA99724.zip` as the build.
+            Install: download `PPSA99724.zip` and follow [`docs/install.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/install.md).
 
             The source is MIT OR Apache-2.0. This binary links GPL-3.0-or-later code from PS5_Vulkan and PS5_PayloadSDK, so the binary is GPL-3.0-or-later: `COPYING` and the notices are in the zip. Its source is this repository at this tag and the revisions [`scripts/pins.env`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/scripts/pins.env) names.
           files: |

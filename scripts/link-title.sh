@@ -15,7 +15,7 @@ root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source "$root/scripts/pins.env"
 lib=${1:?usage: link-title.sh <staticlib> <TITLE_ID> [name]}
 title_id=${2:?usage: link-title.sh <staticlib> <TITLE_ID> [name]}
-name=${3:-punktfunk}
+name=${3:-Punktfunk}
 [[ $title_id =~ ^PPSA[0-9]{5}$ ]] || { echo "TITLE_ID must look like PPSA12345" >&2; exit 2; }
 
 tc="$root/.toolchains"
