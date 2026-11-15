@@ -22,7 +22,7 @@ goes wrong.
 1. Download `PPSA99724.zip` from the
    [latest release](https://github.com/punktfunk/client-ps5/releases). `PPSA99724.zip.sha256`
    beside it is its checksum, if you want to check the download.
-2. Extract the zip. It holds the `PPSA99724` folder, and the license texts beside it.
+2. Extract the zip. It holds the `PPSA99724` folder.
 3. Connect your FTP client to the console and upload the whole `PPSA99724` folder into
    `/data/homebrew/`. The result is `/data/homebrew/PPSA99724/eboot.bin`. Don't upload the zip
    itself or only some of the files.
