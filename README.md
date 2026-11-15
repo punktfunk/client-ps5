@@ -24,6 +24,17 @@ platform, Videodec2, a Vulkan presenter on a statically linked RADV, and the tit
 > **Early release.** It streams on a tester's PS5 (firmware 13.42); other firmwares, loaders and
 > TVs are untested. A release stays a pre-release until a tester has run that build.
 
+<p align="center">
+  <img src="assets/screenshots/home.jpg" width="100%" alt="The host list, with the focused host's games below it">
+</p>
+<p align="center">
+  <img src="assets/screenshots/library.jpg" width="49%" alt="A host's library: its desktops and games">
+  <img src="assets/screenshots/launch.jpg" width="49%" alt="Launching a game">
+</p>
+
+<sub>The interface as this client draws it, rendered on a development machine with sample hosts
+and games.</sub>
+
 ## Features
 
 What it is built to do:
