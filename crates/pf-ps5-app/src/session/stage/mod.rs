@@ -307,17 +307,23 @@ impl VideoStage {
         if self.sink.is_dead() {
             return SinkResult::Dead;
         }
-        match self.recovery.gate(&flags) {
-            HoldGate::Feed => {}
+        let resumed = match self.recovery.gate(&flags) {
+            HoldGate::Feed => false,
             // The real timeline just jumped (freeze then reanchor) — nothing about the pre-hold
             // accumulator is worth continuing.
-            HoldGate::Resume => self.reset_timeline(),
+            HoldGate::Resume => {
+                self.reset_timeline();
+                true
+            }
             HoldGate::Skip(result) => return result,
-        }
+        };
 
         let base_ns = self.au_stamp_ns(pts_ns, flags.partial);
         let started = self.timing.begin();
         let play_result = self.sink.feed(au, base_ns, feed);
+        if resumed && play_result.is_ok() {
+            self.recovery.repair_played();
+        }
         if let Some(slow) = self.timing.end(started) {
             tracing::warn!(
                 "decoder slow: {:.1}ms (frame {}, pts {:.2}ms)",
@@ -656,8 +662,6 @@ mod tests {
             SinkResult::NeedKeyframe
         ));
         assert!(s.holding());
-        // Throttle expired by host keyframe arrival.
-        s.recovery.clear_keyframe_throttle();
         let before = s.frames();
         assert!(matches!(
             s.submit(&frame(2, Some((true, false, 0)), true, false)),
@@ -706,6 +710,29 @@ mod tests {
             SinkResult::Presented { .. }
         ));
         assert!(!s.holding());
+    }
+
+    /// A loss right after the frame that lifted the last one asks at once, not when the last
+    /// request's window ends.
+    #[test]
+    fn a_loss_after_the_lift_asks_at_once() {
+        let mut s = stage(None);
+        assert!(matches!(
+            s.submit(&frame(1, None, false, true)),
+            SinkResult::NeedKeyframe
+        ));
+        assert!(
+            matches!(s.submit(&frame(2, None, false, false)), SinkResult::Held),
+            "inside the window"
+        );
+        assert!(matches!(
+            s.submit(&frame(3, None, true, false)),
+            SinkResult::Presented { .. }
+        ));
+        assert!(matches!(
+            s.submit(&frame(4, None, false, true)),
+            SinkResult::NeedKeyframe
+        ));
     }
 
     /// Only decoded pictures increment `frames`. Held and refused deliveries don't.

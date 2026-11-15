@@ -14,8 +14,9 @@ use crate::session::StreamStats;
 
 use super::{FrameFlags, SinkResult};
 
-/// Minimum spacing between [`SinkResult::NeedKeyframe`] results: the request travels on its own
-/// QUIC control stream, so a tight interval costs nothing but the request itself.
+/// Minimum spacing between [`SinkResult::NeedKeyframe`] results, so a burst of skipped frames
+/// cannot storm the control stream. A resume frame that played ends it early: the ask was
+/// answered, and the next loss is a new one.
 const KEYFRAME_REQUEST_MIN_INTERVAL: Duration = Duration::from_millis(100);
 
 /// What [`Recovery::gate`] decided about this frame.
@@ -85,9 +86,9 @@ impl Recovery {
         ready
     }
 
-    /// Forget when the last keyframe request went out, so the next one is allowed immediately.
-    #[cfg(test)]
-    pub(super) fn clear_keyframe_throttle(&mut self) {
+    /// The frame that lifted the hold played: the ask behind it was answered, so the next
+    /// request goes at once. A refused resume frame leaves the slot the hold's.
+    pub(super) fn repair_played(&mut self) {
         self.last_keyframe_request = None;
     }
 
