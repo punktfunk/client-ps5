@@ -5,6 +5,7 @@ fn main() {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo");
     let root = format!("{manifest_dir}/../..");
     println!("cargo:rerun-if-changed={root}/Cargo.lock");
+    println!("cargo:rerun-if-changed={root}/packaging/COPYING");
     println!("cargo:rerun-if-changed={root}/THIRD-PARTY-NOTICES.txt");
     if std::env::var("CARGO_CFG_TARGET_VENDOR").as_deref() == Ok("sie") {
         generate_third_party_notices(&root);
@@ -22,14 +23,18 @@ fn generate_third_party_notices(root: &str) {
     use std::process::Command;
 
     const BUNDLED_COMPONENTS: &[(&str, &str, Option<&str>, &str)] = &[
-        ("ps5-payload-sdk startup code and libc shims",
-         "Linked into test builds only. GPL-3.0-or-later; plan WP6 replaces it before any release.",
-         None,
-         "https://github.com/ps5-payload-dev/sdk"),
+        ("PS5_Vulkan title runtime",
+         "Entry point, C++ runtime glue and the libc.prx companion. GPL-3.0-or-later.",
+         Some("packaging/COPYING"),
+         "https://github.com/mihawk-99/PS5_Vulkan"),
+        ("PS5_PayloadSDK platform layer",
+         "Heap, thread stacks and libc replacements (libps5platform). GPL-3.0-or-later.",
+         Some("packaging/COPYING"),
+         "https://github.com/mihawk-99/PS5_PayloadSDK"),
         ("Mesa RADV (PS5 port)",
          "The Vulkan driver, a static archive linked into the title. MIT License, with zlib and zstd (zlib/BSD).",
          None,
-         "https://github.com/ps5-payload-dev/pacbrew-repo/tree/master/mesa"),
+         "https://github.com/KrisEnigma/PS5_Mesa"),
         ("PyroWave and Granite",
          "GPU wavelet decoder, linked through pyrowave-sys. MIT License.",
          None,
@@ -167,8 +172,9 @@ fn generate_third_party_notices(root: &str) {
     lines.push(String::new());
     lines.push("punktfunk-ps5 (https://github.com/punktfunk/client-ps5) source is licensed under".to_string());
     lines.push("MIT OR Apache-2.0, matching upstream punktfunk (https://git.unom.io/unom/punktfunk).".to_string());
-    lines.push("Released binaries are MIT OR Apache-2.0 too. Unreleased test builds link".to_string());
-    lines.push("GPL-3.0-or-later startup code and are GPL-3.0-or-later.".to_string());
+    lines.push("This binary links the GPL-3.0-or-later pieces listed first below, so the binary".to_string());
+    lines.push("is GPL-3.0-or-later. Its source is the client-ps5 repository at this build's tag".to_string());
+    lines.push("and the revisions scripts/pins.env names there.".to_string());
     lines.push("It links the Rust crates listed below and the non-Rust components listed first;".to_string());
     lines.push("the full license texts follow the manifest.".to_string());
     lines.push(String::new());

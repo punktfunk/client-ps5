@@ -2,7 +2,7 @@
 """Lays out a build in dist/: unpack.py ZIP.
 
 ZIP is CI's `title` artifact (title zips, their checksums and ELFs) or one title zip. Each title
-zip is checked against the .sha256 beside it, then replaces dist/<TITLE_ID>/.
+zip is checked against the .sha256 beside it, then its PPSA folder replaces dist/<TITLE_ID>/.
 """
 import hashlib
 import os
@@ -26,12 +26,13 @@ def unpack_title(path: str) -> None:
         if want != got:
             sys.exit(f"{name} is damaged: its checksum doesn't match. Download the build again.")
     with zipfile.ZipFile(path) as z:
-        tops = {n.split("/")[0] for n in z.namelist()}
+        # Folders only: the license text and notices sit beside the title folder.
+        tops = {n.split("/")[0] for n in z.namelist() if "/" in n}
         if len(tops) != 1 or not TITLE.fullmatch(next(iter(tops))):
             sys.exit(f"{name} isn't a title zip: it should hold one PPSA folder.")
         title_id = tops.pop()
         shutil.rmtree(os.path.join(DIST, title_id), ignore_errors=True)
-        z.extractall(DIST)
+        z.extractall(DIST, members=[n for n in z.namelist() if n.startswith(title_id + "/")])
     print(f"dist/{title_id} ready")
 
 

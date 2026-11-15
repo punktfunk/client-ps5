@@ -15,8 +15,8 @@ expect failures: a failure with its log is a good result.
   need `nc`, which macOS and Linux have.
 - **A punktfunk host** on the same network ([install it](https://docs.punktfunk.unom.io/docs/install))
   and its IP address. Use a cable for the console and the host in the stream rounds.
-- **The build:** `title.zip` from the developer. It holds both titles: **punktfunk** (PPSA99724)
-  and **punktfunk probe** (PPSA99725).
+- **The build:** a release's `PPSA99724.zip`, which holds **punktfunk**, or `title.zip` from
+  the developer, which also holds **punktfunk probe** (PPSA99725).
 
 ## Set up once
 
