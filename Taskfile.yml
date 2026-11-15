@@ -72,18 +72,20 @@ tasks:
     cmds: [bash scripts/cargo-ps5.sh build]
 
   package:
-    desc: Link and lay out dist/<TITLE_ID>/ (eboot.bin, sce_sys, sce_module) and its zip, license text beside the folder
+    desc: Link and lay out dist/<TITLE_ID>/ (eboot.bin, sce_sys, sce_module, license text) and its zip
     deps: [build]
+    env: { PKG_VERSION: '{{.PKG_VERSION}}' }
     cmds:
       - bash scripts/link-title.sh target/x86_64-sie-ps5/release/libpf_ps5_title.a {{.TITLE_ID}} Punktfunk
-      - cd dist && cp ../packaging/COPYING ../THIRD-PARTY-NOTICES.txt . && zip -qr {{.TITLE_ID}}.zip {{.TITLE_ID}} COPYING THIRD-PARTY-NOTICES.txt && sha256sum {{.TITLE_ID}}.zip > {{.TITLE_ID}}.zip.sha256
+      - cd dist && rm -f {{.TITLE_ID}}.zip && zip -qr {{.TITLE_ID}}.zip {{.TITLE_ID}} && sha256sum {{.TITLE_ID}}.zip > {{.TITLE_ID}}.zip.sha256
 
   package-probe:
     desc: The probe as its own title (TITLE_ID_PROBE, default PPSA99725)
+    env: { PKG_VERSION: '{{.PKG_VERSION}}' }
     cmds:
       - bash scripts/cargo-ps5.sh build --probe
       - bash scripts/link-title.sh target/x86_64-sie-ps5/release/libpf_ps5_title.a {{.PROBE_ID}} "Punktfunk Probe"
-      - cd dist && cp ../packaging/COPYING ../THIRD-PARTY-NOTICES.txt . && zip -qr {{.PROBE_ID}}.zip {{.PROBE_ID}} COPYING THIRD-PARTY-NOTICES.txt && sha256sum {{.PROBE_ID}}.zip > {{.PROBE_ID}}.zip.sha256
+      - cd dist && rm -f {{.PROBE_ID}}.zip && zip -qr {{.PROBE_ID}}.zip {{.PROBE_ID}} && sha256sum {{.PROBE_ID}}.zip > {{.PROBE_ID}}.zip.sha256
 
   unpack:
     desc: 'Lay out a build (the CI artifact or a title zip) in dist/: task unpack -- ZIP'

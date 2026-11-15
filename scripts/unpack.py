@@ -26,7 +26,7 @@ def unpack_title(path: str) -> None:
         if want != got:
             sys.exit(f"{name} is damaged: its checksum doesn't match. Download the build again.")
     with zipfile.ZipFile(path) as z:
-        # Folders only: the license text and notices sit beside the title folder.
+        # Folders only: a zip from before 0.1.2 holds the license text beside the title folder.
         tops = {n.split("/")[0] for n in z.namelist() if "/" in n}
         if len(tops) != 1 or not TITLE.fullmatch(next(iter(tops))):
             sys.exit(f"{name} isn't a title zip: it should hold one PPSA folder.")

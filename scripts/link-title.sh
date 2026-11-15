@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Links the Rust title (a static library) with RADV into eboot.bin and lays out the title
-# folder: dist/<TITLE_ID>/{eboot.bin, sce_sys/param.json, sce_sys/icon0.png, sce_module/libc.prx}.
+# folder: dist/<TITLE_ID>/{eboot.bin, sce_sys/param.json, sce_sys/icon0.png, sce_module/libc.prx,
+# COPYING, THIRD-PARTY-NOTICES.txt}.
 #
 #   scripts/link-title.sh <libpf_ps5_title.a> <TITLE_ID> [name]
+#
+# PKG_VERSION (0.1.2, as the Taskfile sets it) becomes the title's contentVersion.
 #
 # The link is PS5_Vulkan's radv_link_recipe (tools/radv-link.sh at the pinned revision): its CRT,
 # RADV linked whole, libc++, the SDK fork's platform layer, and the wraps and defsyms that bind
@@ -99,9 +102,13 @@ app="$root/dist/$title_id"
 rm -rf -- "$app"
 mkdir -p "$app/sce_sys" "$app/sce_module"
 "$tool" self --sign --in "$work/eboot.elf" --out "$app/eboot.bin" --magic 0x1D3D154F
-python3 "$root/scripts/render-param.py" "$root/packaging/sce_sys/param.json" "$title_id" "$name" > "$app/sce_sys/param.json"
+python3 "$root/scripts/render-param.py" "$root/packaging/sce_sys/param.json" "$title_id" "$name" "${PKG_VERSION:-}" > "$app/sce_sys/param.json"
 cp "$root/packaging/sce_sys/icon0.png" "$app/sce_sys/icon0.png"
 cp "$vk/runtime/libc.prx" "$app/sce_module/libc.prx"
+# The binary is GPL-3.0-or-later, so its license text and notices travel in its folder. A zip
+# of the folder alone is what a homebrew store installs.
+cp "$root/packaging/COPYING" "$app/COPYING"
+cp "$root/THIRD-PARTY-NOTICES.txt" "$app/THIRD-PARTY-NOTICES.txt"
 cp "$work/llvm-pie.elf" "$root/dist/$title_id.llvm-pie.elf"
 "$tool" self --inspect --file "$app/eboot.bin" > /dev/null
 printf 'title %s: %s (%s bytes); symbols in dist/%s.llvm-pie.elf\n' "$title_id" "$app" "$(stat -c %s "$app/eboot.bin")" "$title_id"
