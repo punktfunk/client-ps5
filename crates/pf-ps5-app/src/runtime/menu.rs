@@ -48,6 +48,8 @@ pub(super) fn run(app: &mut App, notice: Option<String>) -> Result<UiOutcome> {
         fallback_ui: false,
         pyrowave_ok: caps.pyrowave,
         av1_ok: false,
+        // The console reports no headroom figure; the display's HDR bit gates the row.
+        hdr_no_headroom: false,
         store: Some(store.clone()),
         platform: Platform::Ps5,
         gpu_cache_bytes: pf_console_ui::DEFAULT_GPU_CACHE_BYTES,
@@ -55,6 +57,8 @@ pub(super) fn run(app: &mut App, notice: Option<String>) -> Result<UiOutcome> {
         profiles: false,
         spatial: false,
         prompts_unlock: false,
+        // Hide for me is a profile's own list, and the profile picker is off here.
+        hides: false,
         languages: app.device.languages.clone(),
     };
     let scripted = app.test_run.as_ref().and_then(|run| {
