@@ -4,6 +4,7 @@
 //!
 //! Each pad runs a shortcut [`Engine`] first; only what it forwards reaches the host or the
 //! open dial. The defaults are `Client::Ps5`'s: the touchpad click stands in for Create.
+//! The console keeps Create and PS, so Touchpad + L3 / R3 are Select and Guide ([`CHORDS`]).
 
 use std::time::Instant;
 
@@ -43,6 +44,13 @@ const BUTTONS: [u32; 18] = [
     gamepad::BTN_PADDLE1,
 ];
 
+/// The touchpad click held with one more button: that button's stand-in for a console-owned one.
+/// Touchpad + L3 is Select, Touchpad + R3 is Guide.
+const CHORDS: [(u32, u32); 2] = [
+    (gamepad::BTN_LS_CLICK, gamepad::BTN_BACK),
+    (gamepad::BTN_RS_CLICK, gamepad::BTN_GUIDE),
+];
+
 /// What one step produced besides wire input.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Routed {
@@ -59,6 +67,9 @@ type Keys = [(String, Vec<u8>)];
 
 struct Slot {
     last: PadSample,
+    /// Chord buttons that stay off the pad until they lift: letting go of L3 first must not
+    /// turn the held touchpad into a click.
+    swallowed: u32,
     dial: PadDial,
     shortcuts: Engine,
 }
@@ -129,6 +140,7 @@ impl PadRouter {
                         kind: sample.kind,
                         ..PadSample::default()
                     },
+                    swallowed: 0,
                     dial: PadDial::default(),
                     shortcuts: Engine::new(&self.bindings, Device::Pad),
                 }
@@ -264,6 +276,21 @@ fn resolve_kind(setting: GamepadType, pad: PadKind) -> GamepadType {
     }
 }
 
+/// A pad's buttons with each [`CHORDS`] pair replaced by the button it stands for. The pair stays
+/// out of the result until each of its buttons lifts, so only a first press can reach the host.
+fn fold_chords(swallowed: &mut u32, raw: u32) -> u32 {
+    *swallowed &= raw;
+    let mut stood_for = 0;
+    for (partner, bit) in CHORDS {
+        let pair = gamepad::BTN_TOUCHPAD | partner;
+        if raw & pair == pair {
+            *swallowed |= pair;
+            stood_for |= bit;
+        }
+    }
+    (raw & !*swallowed) | stood_for
+}
+
 /// One pad's sample against its last: the engine's due tick, its button edges, then the axes.
 fn diff(
     state: &mut Slot,
@@ -274,6 +301,10 @@ fn diff(
     wire: &mut Vec<InputEvent>,
     routed: &mut Vec<Routed>,
 ) {
+    let now = &PadSample {
+        buttons: fold_chords(&mut state.swallowed, now.buttons),
+        ..*now
+    };
     let pad = state.last.slot;
     let out = state.shortcuts.tick(at);
     state.apply(out, dial_open, keys, wire, routed);
@@ -581,6 +612,39 @@ mod tests {
         );
         assert_eq!(routed, [Routed::ToggleDial]);
         let (wire, _) = step(&mut r, &[pad(0)], t, true);
+        assert!(wire.is_empty(), "the chord's releases stay local");
+    }
+
+    #[test]
+    fn touchpad_with_l3_or_r3_is_select_or_guide_and_the_pair_never_lands_after_it() {
+        const LS: u32 = gamepad::BTN_LS_CLICK;
+        const RS: u32 = gamepad::BTN_RS_CLICK;
+        let mut r = router();
+        let t = Instant::now();
+        step(&mut r, &[pad(0)], t, false);
+        let (wire, _) = step(&mut r, &[pad(TOUCHPAD)], t, false);
+        assert_eq!(wire, [bit_event(TOUCHPAD, true, 0)], "alone it is the host's click");
+        let (wire, _) = step(&mut r, &[pad(TOUCHPAD | LS)], t, false);
+        assert_eq!(
+            wire,
+            [bit_event(gamepad::BTN_BACK, true, 0), bit_event(TOUCHPAD, false, 0)],
+            "Select goes down, the host lets go of the touchpad, L3 never goes"
+        );
+        let (wire, _) = step(&mut r, &[pad(TOUCHPAD)], t, false);
+        assert_eq!(
+            wire,
+            [bit_event(gamepad::BTN_BACK, false, 0)],
+            "no click when L3 lifts first"
+        );
+        let (wire, _) = step(&mut r, &[pad(TOUCHPAD | RS)], t, false);
+        assert_eq!(wire, [bit_event(gamepad::BTN_GUIDE, true, 0)]);
+        let (wire, _) = step(&mut r, &[pad(RS)], t, false);
+        assert_eq!(
+            wire,
+            [bit_event(gamepad::BTN_GUIDE, false, 0)],
+            "no R3 when the touchpad lifts first"
+        );
+        let (wire, _) = step(&mut r, &[pad(0)], t, false);
         assert!(wire.is_empty(), "the chord's releases stay local");
     }
 

@@ -32,7 +32,8 @@ polling (layout unproven, below), a hostname resolver (addresses only).
 - **Videodec2 lands through a buffer import and one GPU copy** (plan §3.3 step 2), with a staging
   copy (step 3) where the import is refused. No repository imports decoder memory as an image.
 - **The dial opens on Touchpad + Cross, and the escape chord is L1+R1+Options+Touchpad.** Create
-  is system-owned on the console (bit 0x1, see below).
+  is system-owned on the console (bit 0x1, see below). Select and Guide ride Touchpad + L3 and
+  Touchpad + R3, the chords ProsperoLight's user guide lists.
 - **Pacing is newest-picture-at-vblank** under FIFO. `CadenceClock`/`pace_slot` phase pacing waits
   for the first pacing record to show whether it is needed.
 - **Audio is S16** through AudioOut: float formats appear only in the SDL port's code.

@@ -64,7 +64,8 @@ on the same network.
 what to do when something goes wrong.
 
 In a stream, hold the touchpad click and press Cross for the quick menu. Hold L1 + R1 + Options +
-touchpad click for one second to end the stream.
+touchpad click for one second to end the stream. The console keeps Create and PS, so hold the
+touchpad click and press L3 for Select, or R3 for Guide.
 
 ## Help and feedback
 
