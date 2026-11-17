@@ -50,9 +50,11 @@ task deploy
 | --- | --- |
 | Hold the touchpad click, press Cross | Open the quick menu in a stream |
 | Hold L1 + R1 + Options + touchpad click for one second | End the stream |
+| Hold the touchpad click, press L3 | Send Select (Back) to the host |
+| Hold the touchpad click, press R3 | Send Guide to the host |
 
-The Create and PS buttons belong to the console and never reach the game. In the menus, the hint
-bar at the bottom names each button. **Settings → Input → Shortcuts** changes the two shortcuts.
+The Create and PS buttons belong to the console and never reach the game; the last two rows stand in
+for them. In the menus, the hint bar at the bottom names each button. **Settings → Input → Shortcuts** changes the two shortcuts.
 
 ## What works
 

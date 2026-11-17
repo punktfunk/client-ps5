@@ -108,8 +108,11 @@ After a stream round passes, play as you would on any client.
 | --- | --- |
 | Hold the touchpad click, press Cross | Open the quick menu in a stream |
 | Hold L1 + R1 + Options + touchpad click for one second | End the stream |
+| Hold the touchpad click, press L3 | Send Select (Back) to the host |
+| Hold the touchpad click, press R3 | Send Guide to the host |
 
-The Create and PS buttons belong to the console and never reach the game.
+The Create and PS buttons belong to the console and never reach the game; the last two rows stand in
+for them.
 
 When something goes wrong, note the time and what you did. A live log tells the developer the
 rest. Before launching, start a listener on your computer, then deploy with your computer's IP
