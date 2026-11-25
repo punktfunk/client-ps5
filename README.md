@@ -42,13 +42,14 @@ What it is built to do:
 - 3840×2160 at 59.94 or 119.88 Hz: H.264 and HEVC on the console's decoder, PyroWave on its GPU.
 - HDR10 when the display shows HDR and the host sends it.
 - The Punktfunk console UI: hosts, pairing, game libraries and settings, driven by the controller.
-- DualSense rumble, adaptive triggers, light bar, touchpad and motion, one controller per
-  signed-in user.
+- DualSense rumble, haptics, adaptive triggers, light bar, touchpad and motion, one controller
+  per signed-in user.
 - Stereo, 5.1 and 7.1 sound.
 - A keyboard that types into the host and a controller mouse for its pointer, both in the quick
   menu.
 
-Not yet: DualSense haptics, a USB keyboard or mouse, VRR, and host names (enter an IP address).
+Not yet: the controller's speaker, a USB keyboard or mouse, VRR, and host names (enter an IP
+address).
 
 ## Install it on a console
 
