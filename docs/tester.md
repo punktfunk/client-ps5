@@ -55,7 +55,9 @@ itself. It runs twice: the second launch checks that its files and its pairing s
 4. Launch **Punktfunk Probe** from the home screen and leave it alone until it closes. Near the
    end it shows four colour fills for half a minute, then a grey picture for about a minute
    while the television changes mode several times. During the grey picture, note when the
-   television shows its HDR badge and what refresh rate its information bar reads.
+   television shows its HDR badge and what refresh rate its information bar reads. Hold the
+   controller for the last check: it buzzes on one side, then the other, then rumbles. Note
+   which side came first.
 5. Fetch its log. It prints one line: `ok: …`, `FAILED (…): …` or `STOPPED in …`.
 
    ```sh

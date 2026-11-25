@@ -102,6 +102,7 @@ const CHECKS: &[(&str, Check)] = &[
     ("output-mode", output_mode),
     ("names", names),
     ("system-status", system_status),
+    ("haptics", haptics),
 ];
 
 /// Runs every check in order. Returns how many failed.
@@ -402,6 +403,24 @@ fn system_status(_: &Ctx) -> Result<Outcome> {
 #[cfg(not(target_vendor = "sie"))]
 fn system_status(_: &Ctx) -> Result<Outcome> {
     Ok(Outcome::Skip("the system service is the console's".into()))
+}
+
+/// The pad's voice coils through the vibration port: a tone on the left coil, then the right,
+/// then the motors' rumble. Hold the pad: which side buzzed, and in which order, is the result.
+#[cfg(target_vendor = "sie")]
+fn haptics(_: &Ctx) -> Result<Outcome> {
+    let mut steps = Vec::new();
+    let result = pf_ps5_sys::pad::haptics_probe(&mut |line| steps.push(line));
+    let steps = steps.join("; ");
+    match result {
+        Ok(()) => ok(steps),
+        Err(code) => bail!("{code:#010x}: {steps}"),
+    }
+}
+
+#[cfg(not(target_vendor = "sie"))]
+fn haptics(_: &Ctx) -> Result<Outcome> {
+    Ok(Outcome::Skip("the pad's coils are the console's".into()))
 }
 
 fn files(ctx: &Ctx) -> Result<Outcome> {
