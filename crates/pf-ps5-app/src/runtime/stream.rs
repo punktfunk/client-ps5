@@ -98,6 +98,7 @@ fn input_loop(
     let mut rich = RichPads::default();
     let mut rich_out = Vec::new();
     let mut taps = Vec::new();
+    let mut coils = Coils::default();
     let mut dial_open = false;
     let mut next = Instant::now();
     while !stop.load(Ordering::Relaxed) {
@@ -138,7 +139,7 @@ fn input_loop(
         for r in routed.drain(..) {
             let _ = tx.send(r);
         }
-        apply_feedback(pads.as_mut(), input);
+        apply_feedback(pads.as_mut(), input, &mut coils);
         next += INPUT_PERIOD;
         let now = Instant::now();
         if next > now {
@@ -161,9 +162,17 @@ fn input_loop(
     pads
 }
 
+/// Who drives each pad's coils, and the rumble the host last asked of it.
+#[derive(Default)]
+struct Coils {
+    haptics: [bool; super::pads::SLOTS],
+    rumble: [(u16, u16); super::pads::SLOTS],
+}
+
 /// The host's rumble and `DualSense` feedback, onto the pads. Both planes drain every tick: a
 /// bounded plane left unread drops its newest events, including the zero that stops a motor.
-fn apply_feedback(pads: &mut dyn Pads, input: &InputSender) {
+/// While a pad's haptics frames arrive its coils are theirs, and its rumble waits.
+fn apply_feedback(pads: &mut dyn Pads, input: &InputSender, coils: &mut Coils) {
     use punktfunk_core::quic::HidOutput;
     let client = input.client();
     for _ in 0..FEEDBACK_BUDGET {
@@ -171,13 +180,31 @@ fn apply_feedback(pads: &mut dyn Pads, input: &InputSender) {
             break;
         };
         let Ok(slot) = u8::try_from(cmd.pad) else { continue };
-        pads.feedback(
-            slot,
-            &PadFeedback::Rumble {
-                low: cmd.low,
-                high: cmd.high,
-            },
-        );
+        let Some(rumble) = coils.rumble.get_mut(usize::from(slot)) else {
+            continue;
+        };
+        *rumble = (cmd.low, cmd.high);
+        if !coils.haptics[usize::from(slot)] {
+            pads.feedback(
+                slot,
+                &PadFeedback::Rumble {
+                    low: cmd.low,
+                    high: cmd.high,
+                },
+            );
+        }
+    }
+    for (slot, was) in coils.haptics.iter_mut().enumerate() {
+        let live = crate::session::haptics::COILS.live(slot as u8);
+        if live != *was {
+            *was = live;
+            pads.feedback(slot as u8, &PadFeedback::Haptics(live));
+            if !live {
+                // The motors take up where the host left them.
+                let (low, high) = coils.rumble[slot];
+                pads.feedback(slot as u8, &PadFeedback::Rumble { low, high });
+            }
+        }
     }
     for _ in 0..FEEDBACK_BUDGET {
         let Ok(event) = client.next_hidout(Duration::ZERO) else {

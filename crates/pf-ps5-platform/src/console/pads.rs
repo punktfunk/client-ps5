@@ -120,6 +120,17 @@ impl Pads for Ps5Pads {
                         scePadSetTriggerEffect(handle, &p);
                     }
                 }
+                PadFeedback::Haptics(on) => {
+                    // The motors stop before the coils change hands.
+                    scePadSetVibration(handle, &ScePadVibrationParam::default());
+                    let mode = if *on {
+                        VIBRATION_MODE_HAPTICS
+                    } else {
+                        VIBRATION_MODE_RUMBLE
+                    };
+                    let rc = scePadSetVibrationMode(handle, mode);
+                    tracing::info!("pad: slot {slot} vibration mode {mode}: {}", pf_ps5_sys::sce_error(rc));
+                }
             }
         }
     }

@@ -32,6 +32,8 @@ pub struct Media {
 pub struct MediaPipeline {
     video_thread: std::thread::JoinHandle<()>,
     audio_thread: std::thread::JoinHandle<()>,
+    /// The pads' voice coils, where the platform has them.
+    haptics_thread: Option<std::thread::JoinHandle<()>>,
 }
 
 impl MediaPipeline {
@@ -64,15 +66,26 @@ impl MediaPipeline {
                 return Err(e);
             }
         };
+        // Haptics are an extra: a thread that won't start leaves the motors' rumble.
+        let haptics_thread = media.audio.haptics().then(|| {
+            crate::session::haptics::spawn(client.clone(), media.audio.clone(), stop.clone())
+                .map_err(|e| tracing::warn!("haptics: {e:#}"))
+                .ok()
+        });
         Ok(Self {
             video_thread,
             audio_thread,
+            haptics_thread: haptics_thread.flatten(),
         })
     }
 
     /// Waits the threads out, bounded. `false` means one is still running.
     pub fn join(self) -> bool {
-        join_thread(self.video_thread, "video") & join_thread(self.audio_thread, "audio")
+        let media = join_thread(self.video_thread, "video") & join_thread(self.audio_thread, "audio");
+        media
+            & self
+                .haptics_thread
+                .is_none_or(|haptics| join_thread(haptics, "haptics"))
     }
 }
 

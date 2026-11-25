@@ -153,6 +153,16 @@ pub struct StreamSpec {
 /// The console's audio output. Opening a port is cheap; a session holds one.
 pub trait AudioOut: Send + Sync {
     fn open(&self, channels: u8, rate: u32) -> Result<Box<dyn AudioPort>>;
+
+    /// Pads here have voice coils a port can play on, so a session asks the host for haptics.
+    fn haptics(&self) -> bool {
+        false
+    }
+
+    /// A 48 kHz stereo port on the coils of the pad in `slot`: left and right actuator.
+    fn open_haptics(&self, _slot: u8) -> Result<Box<dyn AudioPort>> {
+        anyhow::bail!("no pad here has voice coils")
+    }
 }
 
 /// One open output port. Interleaved f32 at the opened rate and width.
@@ -229,6 +239,8 @@ pub enum PadFeedback {
         which: u8,
         effect: Vec<u8>,
     },
+    /// Who drives the pad's coils: the haptics port, or the motors' rumble.
+    Haptics(bool),
 }
 
 /// Every pad the console reports. Polled by the input thread.
