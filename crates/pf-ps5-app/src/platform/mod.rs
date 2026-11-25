@@ -87,10 +87,17 @@ pub trait Display {
 
     fn refresh(&self) -> Refresh;
 
-    /// Draws one frame and presents it at the next vblank: the newest due stream picture
-    /// (when [`Self::set_stream`] is on), then `ui` over it on a transparent layer. Blocks
-    /// until a swapchain image is free, so this paces the main loop.
+    /// Draws one frame and presents it at the next vblank: the newest stream picture (when
+    /// [`Self::set_stream`] is on), then `ui` over it on a transparent layer. Blocks while the
+    /// frame before it waits for its vblank, so a loop that calls this every turn runs at the
+    /// refresh rate.
     fn frame(&mut self, ui: &mut dyn FnMut(&skia_safe::Canvas)) -> Result<FrameReport>;
+
+    /// Whether a stream picture waits to be shown, after at most `timeout`. A display with no
+    /// picture queue answers at once, and its loop then presents every vblank.
+    fn wait_picture(&self, _timeout: std::time::Duration) -> bool {
+        true
+    }
 
     /// Whether the stream layer shows. Off, the UI draws over black.
     fn set_stream(&mut self, on: bool, fit: Fit);
@@ -102,7 +109,8 @@ pub trait Display {
 /// What one presented frame cost.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameReport {
-    /// A vblank went by with nothing new presented.
+    /// A stream picture waited through a vblank it could have shown at; with no stream, a
+    /// vblank went by with nothing presented.
     pub missed: bool,
     /// The stream picture shown this frame was new.
     pub new_picture: bool,

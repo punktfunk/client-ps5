@@ -1,9 +1,10 @@
 //! The stream: the picture on the display's stream layer, the dial, the stats and the start line
 //! over it, and the pads on an input thread of their own.
 //!
-//! The main thread presents at the display's rate. The input thread polls the pads at 250 Hz,
-//! sends their input straight to the host, applies the host's rumble and trigger feedback,
-//! and hands the main thread only what it must act on (the dial, a fired shortcut).
+//! The main thread presents each picture as it arrives, and at the display's rate while the
+//! dial shows. The input thread polls the pads at 250 Hz, sends their input straight to the
+//! host, applies the host's rumble and trigger feedback, and hands the main thread only what it
+//! must act on (the dial, a fired shortcut).
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -32,6 +33,8 @@ const INPUT_PERIOD: Duration = Duration::from_millis(4);
 const FEEDBACK_BUDGET: usize = 32;
 /// Redials after a lost link, and how long each may take.
 const RECONNECTS: u32 = 3;
+/// With no picture arriving, the overlay's figures still redraw this often.
+const IDLE_REDRAW: Duration = Duration::from_millis(100);
 
 /// What the main thread tells the input thread.
 enum ToInput {
@@ -303,6 +306,7 @@ fn stream(
     let mut dial_was_open = false;
     let mut perf = StreamPerf::default();
     let mut last_frame = Instant::now();
+    let period = Duration::from_nanos(app.display.refresh().period_ns());
 
     let next = loop {
         let events = app.system_events();
@@ -339,31 +343,37 @@ fn stream(
             };
         }
 
-        hud.refresh(connected, decoder);
-        let mut present = pf_l10n::console::console_overlay_present_frames(perf.frames, perf.missed);
-        if connected.stats.holding.load(Ordering::Relaxed) {
-            present.push_str(" · ");
-            present.push_str(pf_l10n::console::console_overlay_holding_keyframe());
-        }
-        hud.local = vec![present];
-        let dt = last_frame.elapsed().as_secs_f64();
-        last_frame = Instant::now();
-        let result = app.display.frame(&mut |canvas| {
-            if let Some(fonts) = &fonts {
-                hud.draw(canvas, fonts, scale);
-                if let Some(text) = notice.as_deref().filter(|_| started.elapsed() < hud::NOTICE_FOR) {
-                    hud::draw_notice(canvas, fonts, text, (width, height), scale);
-                }
-                ring.render(canvas, &ui, width, height, scale, fonts, dt);
+        // A frame goes out for something new to show: a picture, the dial moving, or the
+        // overlay's figures after IDLE_REDRAW. A flip per picture is what lets the display
+        // follow the stream's own cadence.
+        let show = ring.damage() != 0 || app.display.wait_picture(period) || last_frame.elapsed() >= IDLE_REDRAW;
+        if show {
+            hud.refresh(connected, decoder);
+            let mut present = pf_l10n::console::console_overlay_present_frames(perf.frames, perf.missed);
+            if connected.stats.holding.load(Ordering::Relaxed) {
+                present.push_str(" · ");
+                present.push_str(pf_l10n::console::console_overlay_holding_keyframe());
             }
-        });
-        match result {
-            Ok(report) => perf.note(&report),
-            Err(e) => {
-                tracing::error!("present: {e:#}");
-                break Next::End(StreamOutcome::ReturnToMenu(Some(
-                    pf_l10n::client::ended_unexpected().into(),
-                )));
+            hud.local = vec![present];
+            let dt = last_frame.elapsed().as_secs_f64();
+            last_frame = Instant::now();
+            let result = app.display.frame(&mut |canvas| {
+                if let Some(fonts) = &fonts {
+                    hud.draw(canvas, fonts, scale);
+                    if let Some(text) = notice.as_deref().filter(|_| started.elapsed() < hud::NOTICE_FOR) {
+                        hud::draw_notice(canvas, fonts, text, (width, height), scale);
+                    }
+                    ring.render(canvas, &ui, width, height, scale, fonts, dt);
+                }
+            });
+            match result {
+                Ok(report) => perf.note(&report),
+                Err(e) => {
+                    tracing::error!("present: {e:#}");
+                    break Next::End(StreamOutcome::ReturnToMenu(Some(
+                        pf_l10n::client::ended_unexpected().into(),
+                    )));
+                }
             }
         }
 
