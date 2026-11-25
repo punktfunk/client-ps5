@@ -6,7 +6,7 @@
 //! open dial. The defaults are `Client::Ps5`'s: the touchpad click stands in for Create.
 //! The console keeps Create and PS, so Touchpad + L3 / R3 are Select and Guide ([`CHORDS`]).
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use pf_client_core::menu_nav::{MenuEvent, MenuNav, MenuSample};
 use pf_client_core::overlay_actions::{OverlayConfig, RingPlatform, SlotId};
@@ -54,8 +54,8 @@ const CHORDS: [(u32, u32); 2] = [
 /// What one step produced besides wire input.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Routed {
-    /// A shortcut opened or closed the dial, or the dial's Back closed it.
-    ToggleDial,
+    /// A shortcut on this pad opened or closed the dial, or the dial's Back closed it.
+    ToggleDial(u8),
     /// A press the open dial takes.
     Dial(MenuEvent),
     /// A shortcut ran one of the dial's commands.
@@ -197,7 +197,7 @@ impl Slot {
                         self.route(bit, false, dial_open, wire, routed);
                     }
                 }
-                Out::Fire(Action::Ring, _) => routed.push(Routed::ToggleDial),
+                Out::Fire(Action::Ring, _) => routed.push(Routed::ToggleDial(self.last.slot)),
                 Out::Fire(Action::Slot(SlotId::Shortcut(id)), phase) => {
                     if let Some((_, vks)) = keys.iter().find(|(k, _)| *k == id) {
                         key_events(vks, phase, wire);
@@ -215,7 +215,7 @@ impl Slot {
         match self.dial.button(bit, down, dial_open) {
             PadRoute::Forward => wire.push(bit_event(bit, down, self.last.slot)),
             PadRoute::Drop => {}
-            PadRoute::Menu(MenuEvent::Back) => routed.push(Routed::ToggleDial),
+            PadRoute::Menu(MenuEvent::Back) => routed.push(Routed::ToggleDial(self.last.slot)),
             PadRoute::Menu(ev) => routed.push(Routed::Dial(ev)),
         }
     }
@@ -495,6 +495,22 @@ impl MenuPads {
     }
 }
 
+/// A tap of one system button on the host's pad, as edges due from `now`. Quick Access
+/// (`MISC1`) goes as Guide held and then A, the chord Steam reads on a pad without the button.
+pub fn tap(bit: u32, pad: u8, now: Instant) -> Vec<(Instant, InputEvent)> {
+    let press = pf_client_core::shortcuts::TAP_PRESS;
+    let edge = |bit, down, after| (now + after, bit_event(bit, down, pad));
+    if bit == gamepad::BTN_MISC1 {
+        return vec![
+            edge(gamepad::BTN_GUIDE, true, Duration::ZERO),
+            edge(gamepad::BTN_A, true, press),
+            edge(gamepad::BTN_A, false, press * 2),
+            edge(gamepad::BTN_GUIDE, false, press * 2),
+        ];
+    }
+    vec![edge(bit, true, Duration::ZERO), edge(bit, false, press)]
+}
+
 pub fn bit_event(bit: u32, pressed: bool, pad: u8) -> InputEvent {
     InputEvent {
         kind: InputKind::GamepadButton,
@@ -561,6 +577,38 @@ mod tests {
         PadRouter::new("", "")
     }
 
+    /// Steam reads Quick Access on a pad without the button as Guide held, then A.
+    #[test]
+    fn a_quick_access_tap_holds_guide_before_it_presses_a() {
+        let now = Instant::now();
+        let edges = |bit| -> Vec<(u32, bool, Duration)> {
+            tap(bit, 2, now)
+                .into_iter()
+                .map(|(due, ev)| {
+                    assert_eq!(ev.flags, 2, "the tap lands on the pad that asked");
+                    (ev.code, ev.x == 1, due - now)
+                })
+                .collect()
+        };
+        let press = pf_client_core::shortcuts::TAP_PRESS;
+        assert_eq!(
+            edges(gamepad::BTN_MISC1),
+            [
+                (gamepad::BTN_GUIDE, true, Duration::ZERO),
+                (gamepad::BTN_A, true, press),
+                (gamepad::BTN_A, false, press * 2),
+                (gamepad::BTN_GUIDE, false, press * 2),
+            ]
+        );
+        assert_eq!(
+            edges(gamepad::BTN_GUIDE),
+            [
+                (gamepad::BTN_GUIDE, true, Duration::ZERO),
+                (gamepad::BTN_GUIDE, false, press)
+            ]
+        );
+    }
+
     fn pad(buttons: u32) -> PadSample {
         PadSample {
             slot: 0,
@@ -610,7 +658,7 @@ mod tests {
             [bit_event(TOUCHPAD, false, 0)],
             "the host lets go of the touchpad"
         );
-        assert_eq!(routed, [Routed::ToggleDial]);
+        assert_eq!(routed, [Routed::ToggleDial(0)]);
         let (wire, _) = step(&mut r, &[pad(0)], t, true);
         assert!(wire.is_empty(), "the chord's releases stay local");
     }
@@ -658,7 +706,7 @@ mod tests {
         assert_eq!(routed, [Routed::Dial(MenuEvent::Move(MenuDir::Right))]);
         let (wire, routed) = step(&mut r, &[pad(gamepad::BTN_B)], t, true);
         assert!(wire.is_empty());
-        assert_eq!(routed, [Routed::ToggleDial]);
+        assert_eq!(routed, [Routed::ToggleDial(0)]);
     }
 
     #[test]

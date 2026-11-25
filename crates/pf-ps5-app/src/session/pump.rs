@@ -457,6 +457,7 @@ pub(super) fn audio_pump(client: &NativeClient, stage: &mut AudioStage, stop: &A
     // 200 a second, until the session ends.
     let mut failing: u32 = 0;
     while !stop.load(Ordering::Relaxed) {
+        stage.set_muted(client.audio_muted());
         let packet = match client.next_audio(AUDIO_WAIT) {
             Ok(packet) => packet,
             Err(PunktfunkError::NoFrame) => {

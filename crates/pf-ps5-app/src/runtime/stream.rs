@@ -11,10 +11,13 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use pf_client_core::menu_nav::MenuEvent;
 use pf_client_core::ring::{RingCommand, RingFacts, RingInput};
 use pf_console_ui::theme;
+use pf_console_ui::widgets::{KeyMsg, Keyboard};
 use punktfunk_core::client::PunktfunkEndReason;
 use punktfunk_core::hud::StatsVerbosity;
+use punktfunk_core::input::{InputEvent, InputKind};
 use punktfunk_core::quic::v2::hello::{ScreenEcho, ScreenWish};
 
 use super::connect::{self, ConnectOutcome};
@@ -34,6 +37,9 @@ const INPUT_PERIOD: Duration = Duration::from_millis(4);
 const FEEDBACK_BUDGET: usize = 32;
 /// Redials after a lost link, and how long each may take.
 const RECONNECTS: u32 = 3;
+/// Backspace and Return on the host's keyboard.
+const VK_BACK: u32 = 0x08;
+const VK_RETURN: u32 = 0x0D;
 /// With no picture arriving, the overlay's figures still redraw this often.
 const IDLE_REDRAW: Duration = Duration::from_millis(100);
 
@@ -42,6 +48,11 @@ enum ToInput {
     DialOpened,
     DialClosed,
     ReleaseAll,
+    /// Tap one system button on the host's pad (`pads::tap`).
+    Tap {
+        pad: u8,
+        bit: u32,
+    },
 }
 
 /// The input thread and its channels. Dropping it without [`Self::stop`] leaks the pads.
@@ -86,6 +97,7 @@ fn input_loop(
     let mut routed = Vec::new();
     let mut rich = RichPads::default();
     let mut rich_out = Vec::new();
+    let mut taps = Vec::new();
     let mut dial_open = false;
     let mut next = Instant::now();
     while !stop.load(Ordering::Relaxed) {
@@ -102,11 +114,20 @@ fn input_loop(
                     router.dial_closed();
                 }
                 ToInput::ReleaseAll => router.release_all(&mut wire),
+                ToInput::Tap { pad, bit } => taps.extend(super::pads::tap(bit, pad, Instant::now())),
             }
         }
         batch.clear();
         pads.poll(&mut batch);
-        router.step(&batch, Instant::now(), dial_open, kind, &mut wire, &mut routed);
+        let now = Instant::now();
+        router.step(&batch, now, dial_open, kind, &mut wire, &mut routed);
+        // A tap's edges in the order they fall due, each once.
+        taps.retain(|(due, ev)| {
+            if *due <= now {
+                wire.push(*ev);
+            }
+            *due > now
+        });
         for ev in &wire {
             input.send(ev);
         }
@@ -283,7 +304,7 @@ fn stream(
     let mode = connected.client().mode();
     let (output_w, output_h) = app.display.size();
     let (width, height) = app.display.ui_size();
-    ring.set_facts(&RingFacts {
+    let facts = RingFacts {
         overlay_actions: settings.overlay_actions.clone(),
         stats_tier: settings.stats_verbosity().label().into(),
         mode: (mode.width, mode.height, mode.refresh_hz),
@@ -292,7 +313,9 @@ fn stream(
         fp_hex: fp_hex(&target.fingerprint),
         pad_type: settings.gamepad_type().to_core(),
         ..RingFacts::default()
-    });
+    };
+    ring.set_facts(&facts);
+    let mut dial = Dial::default();
     // A test run records everything; otherwise the player's stats setting.
     let initial_tier = if app.test_run.is_some() {
         StatsVerbosity::Detailed
@@ -328,17 +351,21 @@ fn stream(
             tracing::info!("rest mode: ending the stream");
             break Next::End(StreamOutcome::ReturnToMenu(None));
         }
-        if let Some(n) = take_routed(&input, &mut ring, &mut hud, connected, (width, height)) {
+        if let Some(n) = take_routed(&input, &mut ring, &mut hud, &mut dial, connected, (width, height)) {
             break n;
         }
+        if ring.damage() != 0 {
+            ring.set_facts(&dial.facts(&facts, connected));
+        }
         ring.tick();
-        if let Some(n) = take_ring_commands(&mut ring, &mut hud, connected) {
+        if let Some(n) = take_ring_commands(&mut ring, &mut hud, &mut dial, connected, &input.to) {
             break n;
         }
         for cmd in ring.take_cmds() {
             tracing::info!("dial: no host action {cmd:?} on this console");
         }
-        let open = ring.open();
+        // The keyboard takes the pad the way the dial does.
+        let open = ring.open() || dial.typing;
         if open != dial_was_open {
             dial_was_open = open;
             let _ = input
@@ -357,7 +384,11 @@ fn stream(
         // A frame goes out for something new to show: a picture, the dial moving, or the
         // overlay's figures after IDLE_REDRAW. A flip per picture is what lets the display
         // follow the stream's own cadence.
-        let show = ring.damage() != 0 || app.display.wait_picture(period) || last_frame.elapsed() >= IDLE_REDRAW;
+        let show = ring.damage() != 0
+            || dial.typing
+            || dial.seat > 0.0
+            || app.display.wait_picture(period)
+            || last_frame.elapsed() >= IDLE_REDRAW;
         if show {
             hud.refresh(connected, decoder);
             let mut present = pf_l10n::console::console_overlay_present_frames(perf.frames, perf.missed);
@@ -375,6 +406,12 @@ fn stream(
                         hud::draw_notice(canvas, fonts, text, (width, height), scale);
                     }
                     ring.render(canvas, &ui, width, height, scale, fonts, dt);
+                    dial.seat = dial.keyboard.seat(dial.typing, dt);
+                    if dial.seat > 0.0 {
+                        let (w, bottom) = (f64::from(width), f64::from(height));
+                        dial.keyboard
+                            .render(canvas, &ui, fonts, w, bottom, dial.seat, f64::from(scale));
+                    }
                 }
             });
             match result {
@@ -404,26 +441,101 @@ fn stream(
     next
 }
 
+/// The dial's state beside the ring itself.
+#[derive(Default)]
+struct Dial {
+    /// The pad that opened the dial last: controller mouse and a system button's tap act on it.
+    opener: Option<u8>,
+    /// The controller keyboard is up, and its keys type into the host.
+    typing: bool,
+    keyboard: Keyboard,
+    /// How far the keyboard's tray has risen, from its last frame.
+    seat: f64,
+}
+
+impl Dial {
+    /// The wire pads a dial command acts on: the pad that opened the dial, else every live one.
+    fn target(&self, connected: &Connected) -> u16 {
+        self.opener
+            .map_or_else(|| connected.client().live_pads(), |pad| 1 << pad)
+    }
+
+    /// `base` with what the session holds right now, for the dial's faces.
+    fn facts(&self, base: &RingFacts, connected: &Connected) -> RingFacts {
+        let client = connected.client();
+        let target = self.target(connected);
+        RingFacts {
+            pad_mouse_target: target,
+            pad_mouse: client.pad_mouse_mode(target),
+            pointer_granted: client.access_grants() & punktfunk_core::quic::GRANT_POINTER != 0,
+            audio_mute: client.audio_mute(),
+            invert_scroll: client.invert_scroll(),
+            ..base.clone()
+        }
+    }
+
+    /// One pad event on the controller keyboard. A key types into the host, X deletes, the
+    /// Done key sends Return, and anything that closes the tray ends the typing.
+    fn type_key(&mut self, ev: MenuEvent, connected: &Connected) {
+        let done_key = matches!(ev, MenuEvent::Confirm);
+        let (msg, _) = self.keyboard.menu(ev);
+        let keys = connected.input();
+        let event = |kind, code| InputEvent {
+            kind,
+            _pad: [0; 3],
+            code,
+            x: 0,
+            y: 0,
+            flags: 0,
+        };
+        let tap = |vk: u32| {
+            keys.send(&event(InputKind::KeyDown, vk));
+            keys.send(&event(InputKind::KeyUp, vk));
+        };
+        match msg {
+            KeyMsg::Type(ch) if connected.client().host_caps & punktfunk_core::quic::HOST_CAP_TEXT_INPUT != 0 => {
+                keys.send(&event(InputKind::TextInput, u32::from(ch)));
+            }
+            KeyMsg::Type(_) => tracing::info!("keyboard: this host takes no typed text"),
+            KeyMsg::Backspace => tap(VK_BACK),
+            KeyMsg::Done => {
+                if done_key {
+                    tap(VK_RETURN);
+                }
+                self.typing = false;
+            }
+            KeyMsg::None => {}
+        }
+    }
+}
+
 /// The input thread's hand-offs: the dial, and a shortcut's dial command.
 fn take_routed(
     input: &InputThread,
     ring: &mut pf_console_ui::Ring,
     hud: &mut StatsOverlay,
+    dial: &mut Dial,
     connected: &Connected,
     (width, height): (u32, u32),
 ) -> Option<Next> {
     for routed in input.from.try_iter() {
         match routed {
-            Routed::ToggleDial => ring.input(RingInput::Toggle {
-                x: width as f32 / 2.0,
-                y: height as f32 / 2.0,
-            }),
+            // The chord that opens the dial closes the keyboard instead.
+            Routed::ToggleDial(_) if dial.typing => dial.typing = false,
+            Routed::ToggleDial(pad) => {
+                dial.opener = Some(pad);
+                ring.input(RingInput::Toggle {
+                    x: width as f32 / 2.0,
+                    y: height as f32 / 2.0,
+                });
+            }
+            Routed::Dial(ev) if dial.typing => dial.type_key(ev, connected),
             Routed::Dial(ev) => {
                 ring.menu(ev);
             }
             Routed::Command(cmd) => {
                 tracing::info!("shortcut: {cmd:?}");
-                if let Some(n) = run_command(cmd, hud, connected) {
+                if let Some(n) = run_command(cmd, hud, dial, connected, &input.to) {
                     return Some(n);
                 }
             }
@@ -432,9 +544,15 @@ fn take_routed(
     None
 }
 
-fn take_ring_commands(ring: &mut pf_console_ui::Ring, hud: &mut StatsOverlay, connected: &Connected) -> Option<Next> {
+fn take_ring_commands(
+    ring: &mut pf_console_ui::Ring,
+    hud: &mut StatsOverlay,
+    dial: &mut Dial,
+    connected: &Connected,
+    to: &Sender<ToInput>,
+) -> Option<Next> {
     while let Some(cmd) = ring.take_command() {
-        if let Some(n) = run_command(cmd, hud, connected) {
+        if let Some(n) = run_command(cmd, hud, dial, connected, to) {
             return Some(n);
         }
     }
@@ -442,18 +560,39 @@ fn take_ring_commands(ring: &mut pf_console_ui::Ring, hud: &mut StatsOverlay, co
 }
 
 /// One dial command, picked on the dial or fired by a shortcut (`pads::command`).
-fn run_command(cmd: RingCommand, hud: &mut StatsOverlay, connected: &Connected) -> Option<Next> {
+fn run_command(
+    cmd: RingCommand,
+    hud: &mut StatsOverlay,
+    dial: &mut Dial,
+    connected: &Connected,
+    to: &Sender<ToInput>,
+) -> Option<Next> {
+    let client = connected.client();
     match cmd {
         RingCommand::EndStream | RingCommand::DisconnectLinger => {
             return Some(Next::End(StreamOutcome::ReturnToMenu(None)));
         }
         RingCommand::CycleStats => hud.cycle(connected),
+        RingCommand::Keyboard => dial.typing = !dial.typing,
+        RingCommand::CyclePadMouse => {
+            if let Err(e) = client.cycle_pad_mouse(dial.target(connected)) {
+                tracing::warn!("dial: controller mouse refused: {e}");
+            }
+        }
+        RingCommand::ToggleStreamMute => {
+            let muted = client.audio_mute() & punktfunk_core::client::AUDIO_MUTE_LOCAL != 0;
+            client.set_audio_muted(!muted);
+        }
+        RingCommand::ToggleScrollInvert => client.set_invert_scroll(!client.invert_scroll()),
+        RingCommand::TapButton(bit) => {
+            let pad = dial.opener.unwrap_or(0);
+            let _ = to.send(ToInput::Tap { pad, bit });
+        }
         other => tracing::info!("dial: {other:?} does nothing on this console"),
     }
     None
 }
 
-/// What the presenter reported over the session, for a test run's `perf.json`.
 #[derive(Default)]
 struct StreamPerf {
     frames: u64,

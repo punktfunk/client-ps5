@@ -36,6 +36,8 @@ pub struct AudioStage {
     last: usize,
     /// libopus's output, one frame at the widest layout. A field so it is not zeroed per packet.
     pcm: Box<[f32; SAMPLES_PER_FRAME * MAX_CHANNELS]>,
+    /// The player muted this stream: packets still decode, silence is what plays.
+    muted: bool,
 }
 
 impl AudioStage {
@@ -66,6 +68,7 @@ impl AudioStage {
             f32: Vec::with_capacity(SAMPLES_PER_FRAME * MAX_CHANNELS * 2),
             last: 0,
             pcm: Box::new([0.0; SAMPLES_PER_FRAME * MAX_CHANNELS]),
+            muted: false,
         })
     }
 
@@ -87,6 +90,7 @@ impl AudioStage {
             gaps,
             drought,
             sink,
+            muted,
             ..
         } = self;
         let channels = *channels;
@@ -113,10 +117,19 @@ impl AudioStage {
                 f32.extend_from_slice(decoded);
             }
         }
+        if *muted {
+            pcm[..*last].fill(0.0);
+            f32.fill(0.0);
+        }
         if missing == 0 {
             return sink.feed(Samples::F32(&pcm[..*last]), stamp(0));
         }
         sink.feed(Samples::F32(f32), stamp(0))
+    }
+
+    /// Plays silence in place of the stream until told otherwise. The decoder keeps its state.
+    pub fn set_muted(&mut self, muted: bool) {
+        self.muted = muted;
     }
 
     /// Nothing arrived for a packet's length: one concealed frame if the ring is draining with
@@ -136,6 +149,9 @@ impl AudioStage {
             .decode_float(&[], &mut self.pcm[..width], false)
             .map_err(|e| anyhow::anyhow!("opus decode: {e}"))?;
         self.last = frames * self.channels;
+        if self.muted {
+            self.pcm[..self.last].fill(0.0);
+        }
         self.sink.feed(Samples::F32(&self.pcm[..self.last]), 0)
     }
 
