@@ -137,6 +137,17 @@ extern "C" {
     pub fn sceKernelReleaseFlexibleMemory(addr: *mut c_void, len: usize) -> i32;
     /// One line to the kernel log (klog, TCP 3232). Append the newline yourself.
     pub fn sceKernelDebugOutText(channel: i32, text: *const c_char) -> i32;
+    /// A loaded module's handle (positive), loading it first where it is not.
+    pub fn sceKernelLoadStartModule(
+        path: *const c_char,
+        args: usize,
+        argp: *const c_void,
+        flags: u32,
+        option: *const c_void,
+        result: *mut i32,
+    ) -> i32;
+    /// The address of a module's export, by name.
+    pub fn sceKernelDlsym(module: i32, symbol: *const c_char, address: *mut *mut c_void) -> i32;
     pub fn sceKernelUsleep(micros: u32) -> i32;
     /// The sandbox's ten-character directory name; see [`sandbox_word`].
     pub fn sceKernelGetFsSandboxRandomWord() -> *const c_char;

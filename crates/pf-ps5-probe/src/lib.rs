@@ -99,6 +99,7 @@ const CHECKS: &[(&str, Check)] = &[
     ("display-hdr", display_hdr),
     ("hdr-scanout", hdr_scanout),
     ("fonts", fonts),
+    ("output-mode", output_mode),
 ];
 
 /// Runs every check in order. Returns how many failed.
@@ -332,6 +333,25 @@ fn hdr_scanout(_: &Ctx) -> Result<Outcome> {
 
 #[cfg(not(target_vendor = "sie"))]
 fn hdr_scanout(_: &Ctx) -> Result<Outcome> {
+    Ok(Outcome::Skip("VideoOut is the console's".into()))
+}
+
+/// What the output does when asked for each colorimetry, then for a variable refresh: a grey
+/// picture for about a minute, the television changing mode under it. The kernel log's
+/// `video: port:HDMI …` and `VRR(peg:…)` lines and the television's own readout are the result.
+#[cfg(target_vendor = "sie")]
+fn output_mode(_: &Ctx) -> Result<Outcome> {
+    let mut steps = Vec::new();
+    let result = pf_ps5_sys::videoout::output_mode_probe(&mut |line| steps.push(line));
+    let steps = steps.join("; ");
+    match result {
+        Ok(()) => ok(steps),
+        Err(code) => bail!("{code:#010x}: {steps}"),
+    }
+}
+
+#[cfg(not(target_vendor = "sie"))]
+fn output_mode(_: &Ctx) -> Result<Outcome> {
     Ok(Outcome::Skip("VideoOut is the console's".into()))
 }
 
