@@ -188,6 +188,12 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
   names. Whether the console exports them, and which value brings the output to 709 with HDR
   On, is what probe `output-mode` shows. Firmware's own state codes are `0x5` (709), `0x2`
   (RGB), `0xe` and `0xd` (BT.2020 PQ) in `notify ready-scanin … col:`.
+- **Refresh:** a title that declares 120 Hz opens `VideoOut` at 119.88 (`ref:d`), and on a
+  display that shows 3840x2160 only at 60 Hz the console then sends 1920x1080 (a player's
+  projector, 2026-11-25; no log). The request that holds 59.94 is not known: the mode record's
+  refresh field is 3 for it and 13 for 119.88 (shadPS4 `video_out.h`), and probe `output-mode`
+  asks for both and lists the presets the output takes. The console's own **Enable 120 Hz
+  Output** switch, off, leaves the WSI its 59.94 Hz modes only.
 - **Variable refresh:** `sceVideoOutVrrUnpegFromFixedRate(handle)` lets flips set the refresh
   and `sceVideoOutVrrPegToFixedRate(handle, 0, 0)` holds it again (the names ProsperoLight's
   RADV patch declares; the SDK's stub has neither, so the probe looks them up with

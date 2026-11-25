@@ -104,6 +104,13 @@ The loader found a second copy of `PPSA99724`. Delete the extra one and restart 
 Choose **Add host** and enter the host's IP address. Check that the console and the host are on
 the same network.
 
+### The picture is 1080p on a 4K display
+
+Some displays show 3840×2160 only at 60 Hz. Punktfunk asks the console for 120 Hz, and the
+console then drops such a display to 1920×1080. For 3840×2160 at 60 Hz, turn off **Enable 120 Hz
+Output** under the console's **Settings → Screen and Video → Video Output**, then start
+Punktfunk again.
+
 ### The picture stutters
 
 Use a cable for the console and the host. Under **Settings**, leave the bitrate on Automatic.

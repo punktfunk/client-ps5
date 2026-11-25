@@ -28,6 +28,12 @@ const STATUS_FLIP_ARG: usize = 3;
 const COLORIMETRIES: core::ops::RangeInclusive<u8> = 0..=15;
 /// Flip rates paced under a variable refresh. 90 and 100 divide no 119.88 Hz grid.
 const PACES: [u32; 4] = [60, 90, 100, 50];
+/// `sceVideoOutConfigureOutput` presets asked about: 1 and 15 are known, the rest is the search
+/// for the one that holds the output at 59.94 Hz.
+const PRESETS: core::ops::RangeInclusive<u32> = 0..=31;
+/// The mode record's refresh rates (shadPS4 `video_out.h`).
+const REFRESH_59_94: u64 = 3;
+const REFRESH_119_88: u64 = 13;
 const WIDTH: u32 = 3840;
 const HEIGHT: u32 = 2160;
 const ALIGN: usize = 2 << 20;
@@ -379,6 +385,15 @@ fn output_modes(handle: i32, say: &mut dyn FnMut(String)) -> Result<(), i32> {
     say(format!(
         "119.88 Hz supported {supported}, configure -> {configured:#010x}"
     ));
+    // A question only: no preset is taken here, so the output stays as it is.
+    let offered: Vec<String> = PRESETS
+        .filter_map(|preset| {
+            // SAFETY: a query on a live handle with no parameter blocks.
+            let rc = unsafe { sceVideoOutIsOutputSupported(handle, preset, null, null, null) };
+            (rc > 0).then(|| format!("{preset}={rc}"))
+        })
+        .collect();
+    say(format!("presets the output takes: {}", offered.join(" ")));
     let rc = register(handle, words, FORMAT_SDR);
     say(format!("register sdr {WIDTH}x{HEIGHT} -> {rc:#010x}"));
     if rc != 0 {
@@ -410,22 +425,35 @@ fn output_modes(handle: i32, say: &mut dyn FnMut(String)) -> Result<(), i32> {
             };
             let size = size_of::<Mode>() as u32;
             // SAFETY: `mode` is written by the first call for `size` bytes and read by the second.
-            let ask = |colorimetry: Option<u8>| unsafe {
+            let ask = |colorimetry: Option<u8>, refresh: Option<u64>| unsafe {
                 let mut mode = core::mem::zeroed::<Mode>();
                 any(&mut mode, size);
                 if let Some(colorimetry) = colorimetry {
                     mode.colorimetry = colorimetry;
                 }
+                if let Some(refresh) = refresh {
+                    mode.refresh_rate = refresh;
+                }
                 configure(handle, 0, &mode, null, size, 0)
             };
             for colorimetry in COLORIMETRIES {
-                let rc = ask(Some(colorimetry));
+                let rc = ask(Some(colorimetry), None);
                 say(format!("colorimetry {colorimetry:#x} -> {rc:#010x}"));
                 if rc == 0 {
                     paced(handle, 60, 2, &mut flip);
                 }
             }
-            say(format!("colorimetry any -> {:#010x}", ask(None)));
+            say(format!("colorimetry any -> {:#010x}", ask(None, None)));
+            // A display that shows 3840x2160 only at 60 Hz drops to 1920x1080 for 119.88:
+            // the 59.94 request is what would keep its resolution.
+            for (name, refresh) in [("59.94", REFRESH_59_94), ("119.88", REFRESH_119_88)] {
+                let rc = ask(None, Some(refresh));
+                say(format!("refresh {name} -> {rc:#010x}"));
+                if rc == 0 {
+                    paced(handle, 60, 2, &mut flip);
+                }
+            }
+            say(format!("refresh any -> {:#010x}", ask(None, None)));
         }
         (any, configure) => say(format!(
             "mode request not exported: set-any {:#010x}, configure {:#010x}",
