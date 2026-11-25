@@ -7,6 +7,7 @@ mod connect;
 mod hud;
 mod menu;
 pub mod pads;
+mod rich;
 mod stream;
 pub mod testrun;
 

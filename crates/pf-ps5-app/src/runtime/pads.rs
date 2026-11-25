@@ -268,7 +268,7 @@ fn key_events(vks: &[u8], phase: Phase, wire: &mut Vec<InputEvent>) {
     }
 }
 
-fn resolve_kind(setting: GamepadType, pad: PadKind) -> GamepadType {
+pub(super) fn resolve_kind(setting: GamepadType, pad: PadKind) -> GamepadType {
     match (setting, pad) {
         (GamepadType::Auto, PadKind::DualSense) => GamepadType::DualSense,
         (GamepadType::Auto, PadKind::DualSenseEdge) => GamepadType::DualSenseEdge,

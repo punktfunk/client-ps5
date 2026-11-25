@@ -20,6 +20,7 @@ use punktfunk_core::quic::v2::hello::{ScreenEcho, ScreenWish};
 use super::connect::{self, ConnectOutcome};
 use super::hud::{self, StatsOverlay};
 use super::pads::{PadRouter, Routed};
+use super::rich::RichPads;
 use super::testrun::Scenario;
 use super::{App, StreamOutcome};
 use crate::core::model::GamepadType;
@@ -83,6 +84,8 @@ fn input_loop(
     let mut batch: Vec<PadSample> = Vec::new();
     let mut wire = Vec::new();
     let mut routed = Vec::new();
+    let mut rich = RichPads::default();
+    let mut rich_out = Vec::new();
     let mut dial_open = false;
     let mut next = Instant::now();
     while !stop.load(Ordering::Relaxed) {
@@ -107,6 +110,10 @@ fn input_loop(
         for ev in &wire {
             input.send(ev);
         }
+        rich.step(&batch, dial_open, kind, &mut rich_out);
+        for r in rich_out.drain(..) {
+            let _ = input.client().send_rich_input(r);
+        }
         for r in routed.drain(..) {
             let _ = tx.send(r);
         }
@@ -123,6 +130,10 @@ fn input_loop(
     router.release_all(&mut wire);
     for ev in &wire {
         input.send(ev);
+    }
+    rich.step(&[], true, kind, &mut rich_out);
+    for r in rich_out {
+        let _ = input.client().send_rich_input(r);
     }
     input.release();
     pads.release_all();

@@ -179,6 +179,28 @@ pub struct PadSample {
     pub ry: i16,
     pub lt: u8,
     pub rt: u8,
+    /// Fingers on the touchpad, in the pad's own order.
+    pub touch: [Option<PadTouch>; 2],
+    /// `None` from a pad with no sensors, and while the shell holds the pad.
+    pub motion: Option<PadMotion>,
+}
+
+/// One finger on a pad's touchpad.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PadTouch {
+    /// The pad's own number for this contact: the same while the finger stays down.
+    pub id: u8,
+    /// `0..=65535` across the surface, origin top-left, +y down.
+    pub x: u16,
+    pub y: u16,
+}
+
+/// A pad's gyro (pitch, yaw, roll) and accelerometer in the wire's units:
+/// `gamepad::MOTION_GYRO_LSB_PER_DEG_S` and `MOTION_ACCEL_LSB_PER_G`, +y up.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PadMotion {
+    pub gyro: [i16; 3],
+    pub accel: [i16; 3],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
