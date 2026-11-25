@@ -3,7 +3,7 @@
 //! format and flips solid PQ fills, so the 64 KiB tiling needs no swizzle. Output mode asks the
 //! output for each colorimetry and for a variable refresh, under a grey SDR picture.
 
-use core::ffi::{c_void, CStr};
+use core::ffi::c_void;
 use std::time::{Duration, Instant};
 
 use crate::kernel;
@@ -309,41 +309,6 @@ fn klog(line: &str) {
     }
 }
 
-/// `libSceVideoOut`'s handle, for [`export`]. The module is loaded already: the title imports it.
-fn module() -> Result<i32, i32> {
-    let mut paths = vec![
-        "libSceVideoOut.sprx".to_owned(),
-        "/system/common/lib/libSceVideoOut.sprx".to_owned(),
-    ];
-    paths.extend(kernel::sandbox_word().map(|word| format!("/{word}/common/lib/libSceVideoOut.sprx")));
-    let mut last = -1;
-    for path in paths {
-        let Ok(path) = std::ffi::CString::new(path) else {
-            continue;
-        };
-        let null = core::ptr::null();
-        // SAFETY: a NUL-terminated path, no arguments, no option block, no result wanted.
-        last = unsafe { kernel::sceKernelLoadStartModule(path.as_ptr(), 0, null, 0, null, core::ptr::null_mut()) };
-        if last > 0 {
-            return Ok(last);
-        }
-    }
-    Err(last)
-}
-
-/// An export the SDK's link stub may lack, looked up by name: a missing one is a code here,
-/// where a missing import is a null call.
-fn export(module: i32, name: &CStr) -> Result<*mut c_void, i32> {
-    let mut address = core::ptr::null_mut();
-    // SAFETY: a NUL-terminated name and a live out-pointer.
-    let rc = unsafe { kernel::sceKernelDlsym(module, name.as_ptr(), &mut address) };
-    if rc == 0 && !address.is_null() {
-        Ok(address)
-    } else {
-        Err(rc)
-    }
-}
-
 /// Flips the two buffers at `fps` for `seconds`. Returns the spacing between the flips the
 /// output showed, by its own stamps: least, median and most.
 fn paced(handle: i32, fps: u32, seconds: u32, flip: &mut i64) -> Option<[u64; 3]> {
@@ -423,7 +388,7 @@ fn output_modes(handle: i32, say: &mut dyn FnMut(String)) -> Result<(), i32> {
     let mut flip = 0_i64;
     paced(handle, 60, 2, &mut flip);
 
-    let module = module();
+    let module = kernel::module("libSceVideoOut.sprx");
     say(match module {
         Ok(handle) => format!("libSceVideoOut module {handle}"),
         Err(code) => format!("libSceVideoOut module -> {code:#010x}"),
@@ -431,8 +396,8 @@ fn output_modes(handle: i32, say: &mut dyn FnMut(String)) -> Result<(), i32> {
     let Ok(module) = module else { return Ok(()) };
 
     match (
-        export(module, c"sceVideoOutModeSetAny_"),
-        export(module, c"sceVideoOutConfigureOutputMode_"),
+        kernel::export(module, c"sceVideoOutModeSetAny_"),
+        kernel::export(module, c"sceVideoOutConfigureOutputMode_"),
     ) {
         (Ok(any), Ok(configure)) => {
             // SAFETY: both are the module's exports under their own names, with the PS4
@@ -470,8 +435,8 @@ fn output_modes(handle: i32, say: &mut dyn FnMut(String)) -> Result<(), i32> {
     }
 
     match (
-        export(module, c"sceVideoOutVrrUnpegFromFixedRate"),
-        export(module, c"sceVideoOutVrrPegToFixedRate"),
+        kernel::export(module, c"sceVideoOutVrrUnpegFromFixedRate"),
+        kernel::export(module, c"sceVideoOutVrrPegToFixedRate"),
     ) {
         (Ok(unpeg), Ok(peg)) => {
             // SAFETY: both are the module's exports under their own names: a handle, and a

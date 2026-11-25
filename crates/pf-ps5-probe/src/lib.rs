@@ -100,6 +100,8 @@ const CHECKS: &[(&str, Check)] = &[
     ("hdr-scanout", hdr_scanout),
     ("fonts", fonts),
     ("output-mode", output_mode),
+    ("names", names),
+    ("system-status", system_status),
 ];
 
 /// Runs every check in order. Returns how many failed.
@@ -353,6 +355,53 @@ fn output_mode(_: &Ctx) -> Result<Outcome> {
 #[cfg(not(target_vendor = "sie"))]
 fn output_mode(_: &Ctx) -> Result<Outcome> {
     Ok(Outcome::Skip("VideoOut is the console's".into()))
+}
+
+/// The name the resolver check looks up: reserved for examples, and it always resolves.
+#[cfg(target_vendor = "sie")]
+const LOOKUP: &str = "example.com";
+
+/// A host name into an address, through std and through libSceNet's resolver. Which of the two
+/// answers in a title decides how the client resolves a name typed in place of an address.
+#[cfg(target_vendor = "sie")]
+fn names(_: &Ctx) -> Result<Outcome> {
+    use std::net::ToSocketAddrs;
+    let (tx, rx) = std::sync::mpsc::channel();
+    // std's lookup has no timeout of its own, so it runs beside the check.
+    std::thread::spawn(move || {
+        let _ = tx.send((LOOKUP, 443).to_socket_addrs().map(|mut found| found.next()));
+    });
+    let std = match rx.recv_timeout(Duration::from_secs(10)) {
+        Ok(Ok(Some(found))) => found.ip().to_string(),
+        Ok(Ok(None)) => "no address".into(),
+        Ok(Err(e)) => e.to_string(),
+        Err(_) => "no answer in 10 s".into(),
+    };
+    let mut steps = Vec::new();
+    let name = std::ffi::CString::new(LOOKUP)?;
+    let found = pf_ps5_sys::net::resolve_probe(&name, &mut |line| steps.push(line));
+    let found = found.map_or("no address".into(), |[a, b, c, d]| format!("{a}.{b}.{c}.{d}"));
+    ok(format!("std: {std}; sceNet: {found} ({})", steps.join(", ")))
+}
+
+#[cfg(not(target_vendor = "sie"))]
+fn names(_: &Ctx) -> Result<Outcome> {
+    Ok(Outcome::Skip("a title's resolver is the console's".into()))
+}
+
+/// The system's status record, which says when the home menu covers the title and when the
+/// title runs in the background. The client polls it once this shows the call and its layout.
+#[cfg(target_vendor = "sie")]
+fn system_status(_: &Ctx) -> Result<Outcome> {
+    match pf_ps5_sys::system::status_probe() {
+        Ok(head) => ok(format!("record starts {head}")),
+        Err(code) => bail!("{}", pf_ps5_sys::sce_error(code)),
+    }
+}
+
+#[cfg(not(target_vendor = "sie"))]
+fn system_status(_: &Ctx) -> Result<Outcome> {
+    Ok(Outcome::Skip("the system service is the console's".into()))
 }
 
 fn files(ctx: &Ctx) -> Result<Outcome> {
