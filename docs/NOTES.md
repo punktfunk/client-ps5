@@ -8,14 +8,15 @@ id or probe log; the rest is **sourced, not proven**.
 
 | WP | Written | Proven without a console | Needs a console run for |
 | --- | --- | --- | --- |
-| 0 | probe (16 checks), target JSON, toolchain + link scripts, FFI with layout tests | probe passes on macOS and Linux; layouts pinned; title and probe link in CI (artifact `title`) | `sockbuf` and `mdns`; the rest passed on 13.42 (round 1) |
+| 0 | probe (27 checks), target JSON, toolchain + link scripts, FFI with layout tests | probe passes on macOS and Linux; layouts pinned; title and probe link in CI (artifact `title`) | `sockbuf` and `mdns`; the rest passed on 13.42 (round 1) |
 | 1 | device, `VK_KHR_display` output, presenter, read-back, PyroWave lane | presenter renders the console on lavapipe (CI artifact) | swapchain at 119.88 Hz, pacing record, PyroWave feature line |
 | 2 | console hosting, service loop, store, pairing, library, art | fakes and the host platform; menu test run produces a PNG | Skia's Vulkan backend on RADV (R4) |
 | 3 | stage/timeline/pump (lifted), Videodec2 lane, PyroWave lane | stage tests incl. intra-only anchors | Videodec2 decode, the import step taken, 4K120 budgets |
 | 4 | stream loop, input thread, dial, chord, rumble/light/triggers, AudioOut, reconnect | pad routing, trigger translation, audio ring | input feel, triggers, audio drift |
 
-Not built yet: the rest of plan §9 (surround, haptics, keyboard/mouse, VRR), system-event
-polling (layout unproven, below), a hostname resolver (addresses only).
+Not built yet: the pad's speaker and a USB keyboard or mouse (plan §9), a variable refresh (the
+output is pegged, below), system-event polling and a hostname resolver (probes `system-status`
+and `names` come first).
 
 ## Deviations from the plan, and why
 
@@ -34,8 +35,11 @@ polling (layout unproven, below), a hostname resolver (addresses only).
 - **The dial opens on Touchpad + Cross, and the escape chord is L1+R1+Options+Touchpad.** Create
   is system-owned on the console (bit 0x1, see below). Select and Guide ride Touchpad + L3 and
   Touchpad + R3, the chords ProsperoLight's user guide lists.
-- **Pacing is newest-picture-at-vblank** under FIFO. `CadenceClock`/`pace_slot` phase pacing waits
-  for the first pacing record to show whether it is needed.
+- **A stream presents each picture as it arrives**, one flip in flight. The WSI makes three
+  images and hands out the third while a flip still waits for its vblank, so a loop that
+  presents every turn shows each frame a refresh late; the presenter holds one image back for
+  the swapchain's life (`output::hold_one`). The dial presents every vblank. Read from the WSI
+  at the Mesa pin, not measured on a display.
 - **Audio is S16** through AudioOut: float formats appear only in the SDL port's code.
 
 ## Upstream changes (plan §7)
@@ -130,6 +134,26 @@ HDR, 4K120, 40 s, over Wi-Fi), with the host logs and the tester's report.
   off) logged 25 underruns in 40 s while the ring grew to 65 ms, 24 of them in the first 15 s.
   The HEVC run at ~50 Mbit/s logged none.
 
+## Proven on the console (round 9, 2026-11-23)
+
+Same console, HDR TV and host, wired; the probe built from tag `v0.1.2` with Mesa `c90ea0aab`.
+Evidence: probe logs `wired-hdr-on-probe-1.log`, `-2.log`, `wired-hdr-off-probe-1.log`, `-2.log`
+and kernel log `round9-klog-redacted.txt`, with the tester's report.
+
+- **Display HDR:** `sceVideoOutGetDeviceCapabilityInfo_` answers at an 8-byte record. The word
+  is `0x181` with the console's HDR On and `0x101` with it Off, twice each: bit `0x80` follows
+  the setting.
+- **The output's colour is firmware's choice.** `VideoOut` opens with the request
+  `video mode(res:21ffffff ref:d col:ff …)`, colorimetry "any", and firmware answers
+  `v-request auto …: hdmi:vrr hdr` with HDR On and `… sdr` with it Off. With HDR On the output
+  is `YCC2100_PQ` from the title's launch to its end, the SDR menu included (round 8's kernel
+  log, PPSA99724); HDR10 buffers register and flip either way.
+- **The refresh is pegged.** Firmware logs `119.88Hz request is converted to VRR 119.88Hz` and
+  `VRR(peg:120 range:48 - 120) capable(… range 40 - 165)`: the link runs VRR, held at 120 Hz.
+- **Exit:** after `sceSystemServiceLoadExec("exit")` the shell spawns the title's id once more
+  and that process ends on signal 12, logged as `CRASH KILL_END`. PPSA99303 ends the same way
+  in round 8's log: it is how this exit looks.
+
 ## Console facts the code relies on (sourced, not yet proven)
 
 Sources: ProsperoLight (PL), PS5_Vulkan (VK), PS5_VulkanTemplate (TPL), the payload SDK (SDK),
@@ -156,13 +180,26 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
   present p50 4.1 ms, none dropped (bundle 1792728541).
 - **Display HDR:** `sceVideoOutGetDeviceCapabilityInfo_` (NID `kGVLc3htQE8`) takes the record's
   size as a third argument and fills a `u64` whose `0x80` bit is BT.2020 PQ (shadPS4
-  `video_out.h`, where the bit needs the display's HDR and the title's HDR attribute). Without
-  the size it fails `0x80290001`, HDR On and Off alike (round 8). The size that answers and
-  whether the console's HDR setting clears the bit are what probe `display-hdr` shows; the client
-  asks for HDR only with the bit set, or when the call fails. The firmware's own view is in the
-  kernel log: `v-request auto attr=…: hdmi:vrr hdr` / `sdr`, and `video: port:HDMI …` carries
-  `YCC2100_PQ` / `709`. With HDR Off the output stays 709 under an HDR10 swapchain and the
-  picture looks normal, so a bit that never moves costs nothing visible.
+  `video_out.h`). Without the size it fails `0x80290001` (round 8); round 9 proves the rest. The
+  client asks for HDR only with the bit set, or when the call fails.
+- **Output mode:** the PS4's request is `sceVideoOutModeSetAny_` on a 32-byte record, then
+  `sceVideoOutConfigureOutputMode_(handle, 0, mode, NULL, 32, 0)`; its `colorimetry` byte is
+  `0xff` for any and 12 for BT.2020 PQ (shadPS4 `video_out.cpp`). The SDK's stub carries both
+  names. Whether the console exports them, and which value brings the output to 709 with HDR
+  On, is what probe `output-mode` shows. Firmware's own state codes are `0x5` (709), `0x2`
+  (RGB), `0xe` and `0xd` (BT.2020 PQ) in `notify ready-scanin … col:`.
+- **Refresh:** a title that declares 120 Hz opens `VideoOut` at 119.88 (`ref:d`), and on a
+  display that shows 3840x2160 only at 60 Hz the console then sends 1920x1080 (a player's
+  projector, 2026-11-25; no log). The request that holds 59.94 is not known: the mode record's
+  refresh field is 3 for it and 13 for 119.88 (shadPS4 `video_out.h`), and probe `output-mode`
+  asks for both and lists the presets the output takes. The console's own **Enable 120 Hz
+  Output** switch, off, leaves the WSI its 59.94 Hz modes only.
+- **Variable refresh:** `sceVideoOutVrrUnpegFromFixedRate(handle)` lets flips set the refresh
+  and `sceVideoOutVrrPegToFixedRate(handle, 0, 0)` holds it again (the names ProsperoLight's
+  RADV patch declares; the SDK's stub has neither, so the probe looks them up with
+  `sceKernelDlsym`). ProsperoLight declares `attribute3` `0x40040`; this title's `0x80040`
+  reads `VRR:TypeB` on 13.42, and system software 6.02 is said to refuse `0x80000` (PL
+  CONFIGURATION). Probe `output-mode` unpegs and paces flips at 60, 90, 100 and 50 a second.
 - **Videodec2:** title process only (payload contexts fail), `sceSysmoduleLoadModule(207)` first,
   memory type 12 in 16 KiB pages, a DPB at least the stream's references plus one (a six-deep
   one failed every picture `811d0302` against Intel VAAPI's nine references at 1440p; sized from
@@ -173,9 +210,26 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
   sandbox (PL TROUBLESHOOTING). 4K120 HEVC holds to about 80 Mbit/s (PL PERFORMANCE_GUIDE).
 - **Pads:** one handle per signed-in user, 120-byte state; Create (0x1) and PS (0x10000) are the
   system's; bit 0x80000000 marks a sample the shell intercepted. Trigger effects take Sony's
-  high-level modes, 120-byte parameter (PL ps5_dualsense, duaLib).
+  high-level modes, 120-byte parameter (PL ps5_dualsense, duaLib). The state's motion fields
+  are read as the PS4's: acceleration in g and angular velocity in rad/s, +y up, so a pad
+  lying flat reads `(0, 1, 0)`. Touches are up to two records, packed, each with the pad's own
+  contact id, on a 1920 by 1080 surface. No bundle has read either.
 - **AudioOut:** user 0xFF, MAIN port, 48 kHz, grains of 256..2048 frames in steps of 256,
-  `sceAudioOutOutput` blocks one grain; S16 stereo and 8-channel are hardware-verified.
+  `sceAudioOutOutput` blocks one grain; S16 stereo and 8-channel are hardware-verified. The
+  eight-channel format (2) orders FL FR FC LFE SL SR BL BR, the pairs the wire has the other
+  way round (shadPS4 `sdl_audio_out.cpp`); 5.1 plays on the first six.
+- **Haptics:** a pad's coils play an `AudioOut` port of type 10 opened for the pad's user:
+  `sceAudioOutOpen(user, 10, 0, 256, 48000, 1)`, S16 stereo, left and right actuator, with the
+  pad in `scePadSetVibrationMode` 1; mode 2 is the motors' rumble (PL DUALSENSE and
+  DUALSENSE_WAVEFORM, which record the port opening in a registered title and both sides felt
+  by hand; duaLib for the modes). The host's haptics lane is 5 ms Opus per pad, decoded by
+  core's `pad_mix`. Probe `haptics` plays each coil in turn.
+- **Names:** `sceNetPoolCreate`, `sceNetResolverCreate` and `sceNetResolverStartNtoa(rid, name,
+  &addr, 0, 0, 0)` are the PS4's resolver; whether std's lookup answers in a title is not
+  known. Probe `names` asks both.
+- **System status:** `sceSystemServiceGetStatus` fills an event count, then one byte each for
+  the system's overlay and for running in the background (shadPS4 `systemservice.h`). Probe
+  `system-status` prints the record's head.
 - **klog:** `sceKernelDebugOutText(0, line)`; a title's stderr does not reach it.
 - **System fonts:** the SDK has no font library. A sandbox mounts `/preinst/common/font` at
   `/<word>/common/font`, the word from `sceKernelGetFsSandboxRandomWord`. It holds

@@ -10,6 +10,7 @@
 pub mod audio;
 pub mod audio_out;
 mod connect;
+pub mod haptics;
 mod pipeline;
 pub mod probe;
 mod pump;

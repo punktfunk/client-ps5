@@ -142,12 +142,14 @@ impl Output {
         // SAFETY: the swapchain is live; its images belong to it.
         let images = unsafe { swap_d.get_swapchain_images(swapchain) }?;
         let views = views(dev, &images, want)?;
+        let held = images.len() > 2 && hold_one(dev, &swap_d, swapchain);
         tracing::info!(
-            "swapchain {}x{} @ {} mHz, {} images, FIFO, {}",
+            "swapchain {}x{} @ {} mHz, {} images{}, FIFO, {}",
             extent.width,
             extent.height,
             mode.parameters.refresh_rate,
             images.len(),
+            if held { " (one held)" } else { "" },
             if hdr { "HDR10" } else { "SDR" }
         );
         Ok(Self {
@@ -266,6 +268,28 @@ impl Output {
                 }
             }
         }
+    }
+}
+
+/// Acquires one image and never presents it. The WSI makes three and hands out the third while
+/// a flip still waits for its vblank, which shows every frame one refresh late. With one held,
+/// an acquire waits for the last flip to show. The swapchain's destroy releases the image.
+fn hold_one(dev: &GpuDevice, swap_d: &ash::khr::swapchain::Device, swapchain: vk::SwapchainKHR) -> bool {
+    // SAFETY: the fence is created here, waited once the acquire has it signalled, and destroyed
+    // with no acquire pending on it.
+    unsafe {
+        let Ok(fence) = dev.device.create_fence(&vk::FenceCreateInfo::default(), None) else {
+            return false;
+        };
+        let held = swap_d.acquire_next_image(swapchain, u64::MAX, vk::Semaphore::null(), fence);
+        if held.is_ok() {
+            let _ = dev.device.wait_for_fences(&[fence], true, u64::MAX);
+        }
+        dev.device.destroy_fence(fence, None);
+        if let Err(e) = held {
+            tracing::warn!("swapchain: no image held back ({e}); frames queue one refresh deep");
+        }
+        held.is_ok()
     }
 }
 

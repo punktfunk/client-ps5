@@ -1,7 +1,8 @@
 //! scePad samples into the app's [`PadSample`]: wire button bits, sticks in the wire's range
-//! with +y up, triggers 0..=255. Pure, so it tests anywhere.
+//! with +y up, triggers 0..=255, touchpad contacts and motion in the wire's units. Pure, so it
+//! tests anywhere.
 
-use pf_ps5_app::platform::{PadKind, PadSample};
+use pf_ps5_app::platform::{PadKind, PadMotion, PadSample, PadTouch};
 use pf_ps5_sys::pad::*;
 use punktfunk_core::input::gamepad as wire;
 
@@ -22,6 +23,22 @@ const BUTTONS: [(u32, u32); 15] = [
     (BUTTON_RIGHT, wire::BTN_DPAD_RIGHT),
     (BUTTON_TOUCHPAD, wire::BTN_TOUCHPAD),
 ];
+
+/// The `DualSense`'s touch surface as scePad reports it: 1920 by 1080.
+const TOUCH_MAX: (u16, u16) = (1919, 1079);
+/// scePad's angular velocity is rad/s, its acceleration g.
+const GYRO_LSB_PER_RAD_S: f32 = wire::MOTION_GYRO_LSB_PER_DEG_S as f32 * 180.0 / std::f32::consts::PI;
+const ACCEL_LSB_PER_G: f32 = wire::MOTION_ACCEL_LSB_PER_G as f32;
+
+/// A surface coordinate to the wire's `0..=65535`.
+fn span(raw: u16, max: u16) -> u16 {
+    (u32::from(raw.min(max)) * 65535 / u32::from(max)) as u16
+}
+
+/// A sensor axis to the wire's i16, clipped where the wire's range ends.
+fn sensor(value: f32, scale: f32) -> i16 {
+    (value * scale).clamp(-32768.0, 32767.0) as i16
+}
 
 /// 0..=255 (128 centre) to the wire's i16 range.
 fn stick(raw: u8) -> i16 {
@@ -53,6 +70,19 @@ pub fn sample(slot: u8, data: &ScePadData) -> Option<PadSample> {
     out.ry = stick(data.right_y).saturating_neg();
     out.lt = data.l2;
     out.rt = data.r2;
+    for (finger, touch) in data.touch.iter().take(usize::from(data.touch_count)).enumerate() {
+        out.touch[finger] = Some(PadTouch {
+            id: touch.id,
+            x: span(touch.x, TOUCH_MAX.0),
+            y: span(touch.y, TOUCH_MAX.1),
+        });
+    }
+    // Gravity never reads zero on every axis: that is a sensor that is off, not a pad in free
+    // fall, and the wire's zero would say free fall.
+    out.motion = (data.acceleration != [0.0; 3]).then(|| PadMotion {
+        gyro: data.angular_velocity.map(|v| sensor(v, GYRO_LSB_PER_RAD_S)),
+        accel: data.acceleration.map(|v| sensor(v, ACCEL_LSB_PER_G)),
+    });
     Some(out)
 }
 
@@ -96,8 +126,58 @@ mod tests {
 
     #[test]
     fn an_intercepted_sample_holds_nothing() {
-        let s = sample(1, &data(BUTTON_CROSS | BUTTON_INTERCEPTED)).unwrap();
+        let mut d = data(BUTTON_CROSS | BUTTON_INTERCEPTED);
+        d.touch_count = 1;
+        let s = sample(1, &d).unwrap();
         assert_eq!(s.buttons, 0);
+        assert_eq!((s.touch, s.motion), ([None; 2], None));
         assert!(sample(0, &ScePadData::default()).is_none());
+    }
+
+    #[test]
+    fn touches_span_the_wire_and_keep_their_ids() {
+        let mut d = data(0);
+        d.touch_count = 2;
+        d.touch[0] = ScePadTouch {
+            x: 0,
+            y: 1079,
+            id: 7,
+            ..ScePadTouch::default()
+        };
+        d.touch[1] = ScePadTouch {
+            x: 1919,
+            y: 0,
+            id: 8,
+            ..ScePadTouch::default()
+        };
+        let s = sample(0, &d).unwrap();
+        assert_eq!(s.touch[0], Some(PadTouch { id: 7, x: 0, y: 65535 }));
+        assert_eq!(s.touch[1], Some(PadTouch { id: 8, x: 65535, y: 0 }));
+        d.touch_count = 1;
+        assert_eq!(
+            sample(0, &d).unwrap().touch[1],
+            None,
+            "a stale second record is no finger"
+        );
+    }
+
+    #[test]
+    fn motion_lands_in_the_wires_units() {
+        let mut d = data(0);
+        d.acceleration = [0.0, 1.0, 0.0];
+        d.angular_velocity = [std::f32::consts::PI, 0.0, -1000.0];
+        let m = sample(0, &d).unwrap().motion.unwrap();
+        assert_eq!(
+            m.accel,
+            wire::MOTION_NEUTRAL_ACCEL,
+            "a pad lying flat reads the rest pose"
+        );
+        assert_eq!(m.gyro[0], 180 * wire::MOTION_GYRO_LSB_PER_DEG_S as i16);
+        assert_eq!(m.gyro[2], i16::MIN, "past the wire's range clips");
+        assert_eq!(
+            sample(0, &data(0)).unwrap().motion,
+            None,
+            "a sensor that is off sends nothing"
+        );
     }
 }

@@ -275,6 +275,10 @@ pub fn connect(params: &ConnectParams, media: &Media, attempt: &ConnectAttempt) 
     let negotiated = Negotiated::clamp(params);
     let client = Arc::new(dial(params, &negotiated)?);
     log_handshake(&client, &negotiated);
+    // Before any pad arrives: core adds the renderer to each pad's arrival.
+    for pad in 0..crate::runtime::pads::SLOTS as u8 {
+        client.set_pad_audio_caps(pad, params.pad_audio_caps);
+    }
 
     let stop = Arc::new(AtomicBool::new(false));
     let stats = Arc::new(StreamStats::default());

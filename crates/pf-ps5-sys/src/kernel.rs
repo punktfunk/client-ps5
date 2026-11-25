@@ -102,6 +102,42 @@ pub fn sandbox_word() -> Option<String> {
     Some(word.to_string_lossy().into_owned())
 }
 
+/// A system module's handle by file name (`libSceNet.sprx`). The title imports the module
+/// already, so this loads nothing new. The bare name is tried first, then the system's
+/// directory and the sandbox's.
+#[cfg(target_vendor = "sie")]
+pub fn module(file: &str) -> Result<i32, i32> {
+    let mut paths = vec![file.to_owned(), format!("/system/common/lib/{file}")];
+    paths.extend(sandbox_word().map(|word| format!("/{word}/common/lib/{file}")));
+    let mut last = -1;
+    for path in paths {
+        let Ok(path) = std::ffi::CString::new(path) else {
+            continue;
+        };
+        let null = core::ptr::null();
+        // SAFETY: a NUL-terminated path, no arguments, no option block, no result wanted.
+        last = unsafe { sceKernelLoadStartModule(path.as_ptr(), 0, null, 0, null, core::ptr::null_mut()) };
+        if last > 0 {
+            return Ok(last);
+        }
+    }
+    Err(last)
+}
+
+/// A module's export by name. The SDK's link stubs lack some of what the console exports, and
+/// an import the console lacks is a null call: a missing export here is a code.
+#[cfg(target_vendor = "sie")]
+pub fn export(module: i32, name: &core::ffi::CStr) -> Result<*mut c_void, i32> {
+    let mut address = core::ptr::null_mut();
+    // SAFETY: a NUL-terminated name and a live out-pointer.
+    let rc = unsafe { sceKernelDlsym(module, name.as_ptr(), &mut address) };
+    if rc == 0 && !address.is_null() {
+        Ok(address)
+    } else {
+        Err(rc)
+    }
+}
+
 /// Rounds `len` up to [`PAGE`].
 pub const fn page_align(len: usize) -> usize {
     (len + PAGE - 1) & !(PAGE - 1)
@@ -137,6 +173,17 @@ extern "C" {
     pub fn sceKernelReleaseFlexibleMemory(addr: *mut c_void, len: usize) -> i32;
     /// One line to the kernel log (klog, TCP 3232). Append the newline yourself.
     pub fn sceKernelDebugOutText(channel: i32, text: *const c_char) -> i32;
+    /// A loaded module's handle (positive), loading it first where it is not.
+    pub fn sceKernelLoadStartModule(
+        path: *const c_char,
+        args: usize,
+        argp: *const c_void,
+        flags: u32,
+        option: *const c_void,
+        result: *mut i32,
+    ) -> i32;
+    /// The address of a module's export, by name.
+    pub fn sceKernelDlsym(module: i32, symbol: *const c_char, address: *mut *mut c_void) -> i32;
     pub fn sceKernelUsleep(micros: u32) -> i32;
     /// The sandbox's ten-character directory name; see [`sandbox_word`].
     pub fn sceKernelGetFsSandboxRandomWord() -> *const c_char;

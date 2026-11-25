@@ -62,7 +62,8 @@ impl Ps5Pads {
                     }
                     // SAFETY: a handle just opened.
                     unsafe { scePadSetVibrationMode(handle, VIBRATION_MODE_RUMBLE) };
-                    tracing::info!("pad: user {u:#x} on handle {handle}");
+                    let motion = motion_sensor_on(handle).map_or_else(pf_ps5_sys::sce_error, pf_ps5_sys::sce_error);
+                    tracing::info!("pad: user {u:#x} on handle {handle}, motion sensor {motion}");
                     *slot = Some(Open { user: u, handle });
                 }
             }
@@ -119,6 +120,17 @@ impl Pads for Ps5Pads {
                         scePadSetTriggerEffect(handle, &p);
                     }
                 }
+                PadFeedback::Haptics(on) => {
+                    // The motors stop before the coils change hands.
+                    scePadSetVibration(handle, &ScePadVibrationParam::default());
+                    let mode = if *on {
+                        VIBRATION_MODE_HAPTICS
+                    } else {
+                        VIBRATION_MODE_RUMBLE
+                    };
+                    let rc = scePadSetVibrationMode(handle, mode);
+                    tracing::info!("pad: slot {slot} vibration mode {mode}: {}", pf_ps5_sys::sce_error(rc));
+                }
             }
         }
     }
@@ -130,6 +142,8 @@ impl Pads for Ps5Pads {
             // SAFETY: live handles; locals outlive the calls.
             unsafe {
                 scePadSetVibration(open.handle, &still);
+                // A stream that ended mid-haptics leaves the coils to the motors again.
+                scePadSetVibrationMode(open.handle, VIBRATION_MODE_RUMBLE);
                 scePadSetTriggerEffect(open.handle, &reset);
                 scePadResetLightBar(open.handle);
             }

@@ -426,6 +426,14 @@ impl Display for Presenter {
         self.frames[f].in_use = None;
 
         self.ui.draw(ui);
+        // The output follows the picture about to show: the one waiting, else the one on screen.
+        let next = self.slot.peek().or_else(|| self.current.clone());
+        let want_hdr = !self.hdr_refused && self.stream.is_some() && next.is_some_and(|p| p.color.is_pq());
+        if want_hdr != self.output.hdr && self.output.presents() {
+            self.rebuild(want_hdr)?;
+        }
+        // Waits out the last flip's vblank, so the picture taken after it is the newest by then.
+        let index = self.output.acquire(ready)?;
         let mut report = FrameReport::default();
         if self.stream.is_some() {
             if let Some(picture) = self.slot.take() {
@@ -437,14 +445,8 @@ impl Display for Presenter {
                 self.current = Some(picture);
             }
         }
-        let want_hdr =
-            !self.hdr_refused && self.stream.is_some() && self.current.as_ref().is_some_and(|p| p.color.is_pq());
-        if want_hdr != self.output.hdr && self.output.presents() {
-            self.rebuild(want_hdr)?;
-        }
         self.frames[f].in_use = self.current.clone();
 
-        let index = self.output.acquire(ready)?;
         // SAFETY: the command buffer is not in flight (fence waited) and its pool allows reset;
         // every recorded handle is owned here or by the held picture.
         unsafe {
@@ -494,8 +496,14 @@ impl Display for Presenter {
             }
         }
         let now = Instant::now();
-        let period = Duration::from_nanos(self.refresh().period_ns());
-        report.missed = self.last_present.is_some_and(|t| now - t > period + period / 2);
+        let late = Duration::from_nanos(self.refresh().period_ns() * 3 / 2);
+        report.missed = match report.decode_to_present_us {
+            // A picture that sat through a vblank it could have shown at.
+            Some(waited) => Duration::from_micros(waited.into()) > late,
+            // A stream presents on arrival, so a gap between frames is no miss.
+            None if self.stream.is_some() => false,
+            None => self.last_present.is_some_and(|t| now - t > late),
+        };
         self.last_present = Some(now);
         if report.new_picture {
             if let Some(p) = &self.current {
@@ -504,6 +512,10 @@ impl Display for Presenter {
         }
         self.frame = (f + 1) % FRAMES;
         Ok(report)
+    }
+
+    fn wait_picture(&self, timeout: Duration) -> bool {
+        self.slot.wait(timeout)
     }
 
     fn set_stream(&mut self, on: bool, fit: Fit) {

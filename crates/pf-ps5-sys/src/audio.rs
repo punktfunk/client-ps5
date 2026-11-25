@@ -4,6 +4,8 @@
 use core::ffi::c_void;
 
 pub const PORT_MAIN: i32 = 0;
+/// A pad's voice coils: stereo, left and right actuator, opened for the user who holds the pad.
+pub const PORT_VIBRATION: i32 = 10;
 pub const FORMAT_S16_STEREO: u32 = 1;
 pub const FORMAT_S16_8CH: u32 = 2;
 pub const FORMAT_FLOAT_STEREO: u32 = 4;

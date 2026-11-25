@@ -87,10 +87,17 @@ pub trait Display {
 
     fn refresh(&self) -> Refresh;
 
-    /// Draws one frame and presents it at the next vblank: the newest due stream picture
-    /// (when [`Self::set_stream`] is on), then `ui` over it on a transparent layer. Blocks
-    /// until a swapchain image is free, so this paces the main loop.
+    /// Draws one frame and presents it at the next vblank: the newest stream picture (when
+    /// [`Self::set_stream`] is on), then `ui` over it on a transparent layer. Blocks while the
+    /// frame before it waits for its vblank, so a loop that calls this every turn runs at the
+    /// refresh rate.
     fn frame(&mut self, ui: &mut dyn FnMut(&skia_safe::Canvas)) -> Result<FrameReport>;
+
+    /// Whether a stream picture waits to be shown, after at most `timeout`. A display with no
+    /// picture queue answers at once, and its loop then presents every vblank.
+    fn wait_picture(&self, _timeout: std::time::Duration) -> bool {
+        true
+    }
 
     /// Whether the stream layer shows. Off, the UI draws over black.
     fn set_stream(&mut self, on: bool, fit: Fit);
@@ -102,7 +109,8 @@ pub trait Display {
 /// What one presented frame cost.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FrameReport {
-    /// A vblank went by with nothing new presented.
+    /// A stream picture waited through a vblank it could have shown at; with no stream, a
+    /// vblank went by with nothing presented.
     pub missed: bool,
     /// The stream picture shown this frame was new.
     pub new_picture: bool,
@@ -145,6 +153,16 @@ pub struct StreamSpec {
 /// The console's audio output. Opening a port is cheap; a session holds one.
 pub trait AudioOut: Send + Sync {
     fn open(&self, channels: u8, rate: u32) -> Result<Box<dyn AudioPort>>;
+
+    /// Pads here have voice coils a port can play on, so a session asks the host for haptics.
+    fn haptics(&self) -> bool {
+        false
+    }
+
+    /// A 48 kHz stereo port on the coils of the pad in `slot`: left and right actuator.
+    fn open_haptics(&self, _slot: u8) -> Result<Box<dyn AudioPort>> {
+        anyhow::bail!("no pad here has voice coils")
+    }
 }
 
 /// One open output port. Interleaved f32 at the opened rate and width.
@@ -171,6 +189,28 @@ pub struct PadSample {
     pub ry: i16,
     pub lt: u8,
     pub rt: u8,
+    /// Fingers on the touchpad, in the pad's own order.
+    pub touch: [Option<PadTouch>; 2],
+    /// `None` from a pad with no sensors, and while the shell holds the pad.
+    pub motion: Option<PadMotion>,
+}
+
+/// One finger on a pad's touchpad.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PadTouch {
+    /// The pad's own number for this contact: the same while the finger stays down.
+    pub id: u8,
+    /// `0..=65535` across the surface, origin top-left, +y down.
+    pub x: u16,
+    pub y: u16,
+}
+
+/// A pad's gyro (pitch, yaw, roll) and accelerometer in the wire's units:
+/// `gamepad::MOTION_GYRO_LSB_PER_DEG_S` and `MOTION_ACCEL_LSB_PER_G`, +y up.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PadMotion {
+    pub gyro: [i16; 3],
+    pub accel: [i16; 3],
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -199,6 +239,8 @@ pub enum PadFeedback {
         which: u8,
         effect: Vec<u8>,
     },
+    /// Who drives the pad's coils: the haptics port, or the motors' rumble.
+    Haptics(bool),
 }
 
 /// Every pad the console reports. Polled by the input thread.

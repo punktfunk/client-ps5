@@ -118,7 +118,10 @@ pub(super) fn spawn(
                     gamepad_type: settings.gamepad_type(),
                     // Pad-only: the host draws the cursor.
                     cursor_capture: true,
-                    pad_audio_caps: 0,
+                    // Bit 0 is haptics, and they follow the pad: the settings' haptics row is
+                    // not offered on a console whose every pad has coils. The pad's speaker
+                    // has no port here.
+                    pad_audio_caps: u8::from(media.audio.haptics()),
                     present_priority: settings.present_priority(),
                     screen_wish: ScreenWish::parse(&settings.host_screen),
                 },
