@@ -142,6 +142,8 @@ impl Pads for Ps5Pads {
             // SAFETY: live handles; locals outlive the calls.
             unsafe {
                 scePadSetVibration(open.handle, &still);
+                // A stream that ended mid-haptics leaves the coils to the motors again.
+                scePadSetVibrationMode(open.handle, VIBRATION_MODE_RUMBLE);
                 scePadSetTriggerEffect(open.handle, &reset);
                 scePadResetLightBar(open.handle);
             }
