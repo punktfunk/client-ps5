@@ -139,3 +139,16 @@ extern "C" {
     pub fn scePadResetLightBar(handle: i32) -> i32;
     pub fn scePadSetTriggerEffect(handle: i32, param: *const ScePadTriggerEffectParam) -> i32;
 }
+
+/// Turns a pad's motion sensor on (the PS4's `scePadSetMotionSensorState(handle, true)`), so
+/// its state carries acceleration and angular velocity. Looked up by name: the SDK's stub may
+/// lack it, and a firmware without it answers with a code. Returns the call's own answer.
+#[cfg(target_vendor = "sie")]
+pub fn motion_sensor_on(handle: i32) -> Result<i32, i32> {
+    use crate::kernel::{export, module};
+    let set = export(module("libScePad.sprx")?, c"scePadSetMotionSensorState")?;
+    // SAFETY: the module's export under its own name: a handle and a flag.
+    let set = unsafe { core::mem::transmute::<*mut c_void, unsafe extern "C" fn(i32, bool) -> i32>(set) };
+    // SAFETY: a handle the caller opened.
+    Ok(unsafe { set(handle, true) })
+}

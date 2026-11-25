@@ -77,7 +77,9 @@ pub fn sample(slot: u8, data: &ScePadData) -> Option<PadSample> {
             y: span(touch.y, TOUCH_MAX.1),
         });
     }
-    out.motion = Some(PadMotion {
+    // Gravity never reads zero on every axis: that is a sensor that is off, not a pad in free
+    // fall, and the wire's zero would say free fall.
+    out.motion = (data.acceleration != [0.0; 3]).then(|| PadMotion {
         gyro: data.angular_velocity.map(|v| sensor(v, GYRO_LSB_PER_RAD_S)),
         accel: data.acceleration.map(|v| sensor(v, ACCEL_LSB_PER_G)),
     });
@@ -172,5 +174,10 @@ mod tests {
         );
         assert_eq!(m.gyro[0], 180 * wire::MOTION_GYRO_LSB_PER_DEG_S as i16);
         assert_eq!(m.gyro[2], i16::MIN, "past the wire's range clips");
+        assert_eq!(
+            sample(0, &data(0)).unwrap().motion,
+            None,
+            "a sensor that is off sends nothing"
+        );
     }
 }

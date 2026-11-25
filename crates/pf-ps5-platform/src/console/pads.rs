@@ -62,7 +62,8 @@ impl Ps5Pads {
                     }
                     // SAFETY: a handle just opened.
                     unsafe { scePadSetVibrationMode(handle, VIBRATION_MODE_RUMBLE) };
-                    tracing::info!("pad: user {u:#x} on handle {handle}");
+                    let motion = motion_sensor_on(handle).map_or_else(pf_ps5_sys::sce_error, pf_ps5_sys::sce_error);
+                    tracing::info!("pad: user {u:#x} on handle {handle}, motion sensor {motion}");
                     *slot = Some(Open { user: u, handle });
                 }
             }
