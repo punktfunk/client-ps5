@@ -8,15 +8,15 @@ id or probe log; the rest is **sourced, not proven**.
 
 | WP | Written | Proven without a console | Needs a console run for |
 | --- | --- | --- | --- |
-| 0 | probe (24 checks), target JSON, toolchain + link scripts, FFI with layout tests | probe passes on macOS and Linux; layouts pinned; title and probe link in CI (artifact `title`) | `sockbuf` and `mdns`; the rest passed on 13.42 (round 1) |
+| 0 | probe (26 checks), target JSON, toolchain + link scripts, FFI with layout tests | probe passes on macOS and Linux; layouts pinned; title and probe link in CI (artifact `title`) | `sockbuf` and `mdns`; the rest passed on 13.42 (round 1) |
 | 1 | device, `VK_KHR_display` output, presenter, read-back, PyroWave lane | presenter renders the console on lavapipe (CI artifact) | swapchain at 119.88 Hz, pacing record, PyroWave feature line |
 | 2 | console hosting, service loop, store, pairing, library, art | fakes and the host platform; menu test run produces a PNG | Skia's Vulkan backend on RADV (R4) |
 | 3 | stage/timeline/pump (lifted), Videodec2 lane, PyroWave lane | stage tests incl. intra-only anchors | Videodec2 decode, the import step taken, 4K120 budgets |
 | 4 | stream loop, input thread, dial, chord, rumble/light/triggers, AudioOut, reconnect | pad routing, trigger translation, audio ring | input feel, triggers, audio drift |
 
-Not built yet: the rest of plan §9 (surround, haptics, keyboard/mouse), a variable refresh (the
-output is pegged, below), system-event polling (layout unproven, below), a hostname resolver
-(addresses only).
+Not built yet: haptics and a USB keyboard or mouse (plan §9), a variable refresh (the output is
+pegged, below), system-event polling and a hostname resolver (probes `system-status` and
+`names` come first).
 
 ## Deviations from the plan, and why
 
@@ -204,9 +204,20 @@ OpenNOW-PS5 (ONW). Section numbers refer to the extraction kept with the plan's 
   sandbox (PL TROUBLESHOOTING). 4K120 HEVC holds to about 80 Mbit/s (PL PERFORMANCE_GUIDE).
 - **Pads:** one handle per signed-in user, 120-byte state; Create (0x1) and PS (0x10000) are the
   system's; bit 0x80000000 marks a sample the shell intercepted. Trigger effects take Sony's
-  high-level modes, 120-byte parameter (PL ps5_dualsense, duaLib).
+  high-level modes, 120-byte parameter (PL ps5_dualsense, duaLib). The state's motion fields
+  are read as the PS4's: acceleration in g and angular velocity in rad/s, +y up, so a pad
+  lying flat reads `(0, 1, 0)`. Touches are up to two records, packed, each with the pad's own
+  contact id, on a 1920 by 1080 surface. No bundle has read either.
 - **AudioOut:** user 0xFF, MAIN port, 48 kHz, grains of 256..2048 frames in steps of 256,
-  `sceAudioOutOutput` blocks one grain; S16 stereo and 8-channel are hardware-verified.
+  `sceAudioOutOutput` blocks one grain; S16 stereo and 8-channel are hardware-verified. The
+  eight-channel format (2) orders FL FR FC LFE SL SR BL BR, the pairs the wire has the other
+  way round (shadPS4 `sdl_audio_out.cpp`); 5.1 plays on the first six.
+- **Names:** `sceNetPoolCreate`, `sceNetResolverCreate` and `sceNetResolverStartNtoa(rid, name,
+  &addr, 0, 0, 0)` are the PS4's resolver; whether std's lookup answers in a title is not
+  known. Probe `names` asks both.
+- **System status:** `sceSystemServiceGetStatus` fills an event count, then one byte each for
+  the system's overlay and for running in the background (shadPS4 `systemservice.h`). Probe
+  `system-status` prints the record's head.
 - **klog:** `sceKernelDebugOutText(0, line)`; a title's stderr does not reach it.
 - **System fonts:** the SDK has no font library. A sandbox mounts `/preinst/common/font` at
   `/<word>/common/font`, the word from `sceKernelGetFsSandboxRandomWord`. It holds

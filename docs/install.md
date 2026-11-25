@@ -60,10 +60,13 @@ for them. In the menus, the hint bar at the bottom names each button. **Settings
 
 - 3840×2160 at 60 or 120 Hz: H.264 and HEVC on the console's decoder, PyroWave on its GPU.
 - HDR10 when the TV shows HDR and the host sends it.
-- DualSense rumble, adaptive triggers and light bar, one controller per signed-in user.
-- Stereo sound.
+- DualSense rumble, adaptive triggers, light bar, touchpad and motion, one controller per
+  signed-in user.
+- Stereo, 5.1 and 7.1 sound.
+- From the quick menu: a keyboard that types into the host, and controller mouse, which moves
+  the host's pointer with the touchpad or with the whole controller.
 
-Not yet: surround sound, DualSense haptics, keyboard and mouse, and VRR.
+Not yet: DualSense haptics, a USB keyboard or mouse, and VRR.
 
 HEVC at 3840×2160 and 120 Hz keeps up to about 60 Mbit/s on the console's decoder. Automatic
 bitrate stays under that by itself. PyroWave needs a fast wired link.
