@@ -101,14 +101,14 @@ mod tests {
     }
 
     #[test]
-    fn clamp_keeps_hdr_and_narrows_channels() {
+    fn clamp_keeps_hdr_and_surround() {
         let mut s = default_document();
         s.hdr_enabled = true;
         s.audio_channels = 8;
         s.codec = "av1".into();
         s.clamp_to_caps();
         assert!(s.hdr_enabled);
-        assert_eq!(s.audio_channels, 2);
+        assert_eq!(s.audio_channels, 8);
         assert_eq!(s.codec_pref(), CodecPref::Auto);
     }
 }

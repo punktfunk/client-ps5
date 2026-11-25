@@ -29,7 +29,7 @@ impl VideoCaps {
         hevc: true,
         ten_bit: true,
         hdr: true,
-        max_channels: 2,
+        max_channels: 8,
     };
 
     /// The codec preferences worth offering, in display order. The one place the set is
