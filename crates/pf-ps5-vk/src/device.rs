@@ -218,6 +218,7 @@ impl GpuDevice {
             pyrowave_decode: p.ok,
             f_shader_int16: p.ok,
             f_storage_buffer8: p.ok,
+            f_storage_buffer16: false,
             f_subgroup_size_control: p.ok,
             f_compute_full_subgroups: p.ok,
             f_shader_float16: p.ok && p.float16,

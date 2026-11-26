@@ -67,8 +67,8 @@ pub(super) struct ConnectOutcome {
     pub exit_plan: Option<ExitPlan>,
 }
 
-/// The mode to ask for: the document's explicit pick, or the console's own output where it
-/// says "Native" (`0`). The host refuses a 0×0 request.
+/// The mode to ask for, in whole hertz: the document's explicit pick, or the console's own
+/// output where it says "Native" (`0`). The host refuses a 0×0 request.
 pub(super) fn stream_mode(settings: &store::Settings, native: Mode) -> Mode {
     let explicit = !settings.match_window && settings.width != 0 && settings.height != 0;
     Mode {
@@ -79,6 +79,7 @@ pub(super) fn stream_mode(settings: &store::Settings, native: Mode) -> Mode {
         } else {
             settings.refresh_hz
         },
+        refresh_mhz: 0,
     }
 }
 
@@ -234,6 +235,7 @@ mod tests {
             width: 3840,
             height: 2160,
             refresh_hz: 120,
+            refresh_mhz: 0,
         };
         let mut s = store::Settings::default();
         assert_eq!(stream_mode(&s, output), output);
@@ -245,7 +247,8 @@ mod tests {
             Mode {
                 width: 1920,
                 height: 1080,
-                refresh_hz: 60
+                refresh_hz: 60,
+                refresh_mhz: 0,
             }
         );
     }
