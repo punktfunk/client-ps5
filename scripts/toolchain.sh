@@ -29,6 +29,15 @@ fetch "$PS5_MESA_REPO" "$PS5_MESA_REV" "$tc/PS5_Mesa"
 fetch "$PS5_SDK_REPO" "$PS5_SDK_REV" "$tc/PS5_PayloadSDK"
 
 vk="$tc/PS5_Vulkan"
+# zlib.net answers a CI runner with something else at times. The release on GitHub is the same
+# file, and setup-native-dependencies.sh checks whatever lies here against its own pinned hash.
+zlib_version=$(sed -n 's/^zlib_version="\(.*\)"$/\1/p' "$vk/tools/setup-native-dependencies.sh")
+archive="$vk/.deps/native/zlib/zlib-$zlib_version.tar.gz"
+if [ -n "$zlib_version" ] && [ ! -f "$archive" ]; then
+    mkdir -p "$(dirname "$archive")"
+    wget -q "https://github.com/madler/zlib/releases/download/v$zlib_version/zlib-$zlib_version.tar.gz" \
+        -O "$archive" || rm -f "$archive"
+fi
 PS5_PAYLOAD_SDK_FORK="$tc/PS5_PayloadSDK" bash "$vk/tools/setup-native-dependencies.sh"
 PS5_MESA_FORK="$tc/PS5_Mesa" PS5_MESA_REVISION="$PS5_MESA_REV" bash "$vk/tools/build-radv.sh" release
 
