@@ -21,15 +21,10 @@ use crate::services::store::console::ConsoleStore;
 use crate::services::store::{self, StateWriter};
 use crate::ui::Service;
 
-/// The console's output as a stream mode at its whole rate, for a "Native" pick.
+/// The console's output as a stream mode at its exact rate, for a "Native" pick.
 pub(super) fn native_mode(app: &App) -> Mode {
     let (width, height) = app.display.size();
-    Mode {
-        width,
-        height,
-        refresh_hz: app.display.refresh().hz(),
-        refresh_mhz: 0,
-    }
+    Mode::exact(width, height, app.display.refresh().0)
 }
 
 /// Runs the console until it commits a launch or asks to leave.

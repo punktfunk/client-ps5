@@ -67,19 +67,26 @@ pub(super) struct ConnectOutcome {
     pub exit_plan: Option<ExitPlan>,
 }
 
-/// The mode to ask for, in whole hertz: the document's explicit pick, or the console's own
-/// output where it says "Native" (`0`). The host refuses a 0×0 request.
+/// The mode to ask for: the document's explicit pick, or the console's own output where it
+/// says "Native" (`0`). A Native rate is the output's exact one, 119.88 Hz say; a picked rate
+/// is whole hertz. The host refuses a 0×0 request.
 pub(super) fn stream_mode(settings: &store::Settings, native: Mode) -> Mode {
     let explicit = !settings.match_window && settings.width != 0 && settings.height != 0;
-    Mode {
+    let native_rate = settings.refresh_hz == 0;
+    let whole = Mode {
         width: if explicit { settings.width } else { native.width },
         height: if explicit { settings.height } else { native.height },
-        refresh_hz: if settings.refresh_hz == 0 {
+        refresh_hz: if native_rate {
             native.refresh_hz
         } else {
             settings.refresh_hz
         },
         refresh_mhz: 0,
+    };
+    if native_rate {
+        whole.stating(native.refresh_mhz)
+    } else {
+        whole
     }
 }
 
@@ -251,5 +258,19 @@ mod tests {
                 refresh_mhz: 0,
             }
         );
+    }
+
+    /// A 119.88 Hz output is asked for as that under Native, at any size; a picked rate is whole.
+    #[test]
+    fn a_native_rate_is_the_outputs_exact_one() {
+        let output = Mode::exact(3840, 2160, 119_880);
+        let mut s = store::Settings::default();
+        assert_eq!(stream_mode(&s, output).millihz(), 119_880);
+        s.width = 1920;
+        s.height = 1080;
+        let sized = stream_mode(&s, output);
+        assert_eq!((sized.width, sized.refresh_hz, sized.millihz()), (1920, 120, 119_880));
+        s.refresh_hz = 60;
+        assert_eq!(stream_mode(&s, output).millihz(), 60_000);
     }
 }
