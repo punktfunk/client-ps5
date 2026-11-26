@@ -325,6 +325,7 @@ impl Service {
             can_wake: !online && !h.mac.is_empty(),
             // This client has no per-host clipboard flag; see `ConsoleCmd::SetClipboard`.
             clipboard_sync: false,
+            keep_addr: h.keep_addr,
             // No launch history on the record: ordering by name rather than a recency it lacks.
             last_used: None,
             os: advert
@@ -345,6 +346,8 @@ impl Service {
                 .get(&key)
                 .filter(|_| h.is_paired())
                 .and_then(|(_, t)| t.clone()),
+            // No host runs on this console, so every row streams.
+            local: false,
             key,
         }
     }
@@ -466,8 +469,9 @@ impl Service {
                 label,
             } => self.set_screen(addr, mgmt, fp_hex, Pick { screen, topology }, label),
             // Nothing to do: no status client (Resume badges stay off), no clipboard, no prompt
-            // here, no title is endable or installable (`to_model`), and the profile picker is
-            // off (`ConsoleOptions::profiles`), so nothing is hidden for a profile either.
+            // here, no title is endable or installable (`to_model`), the profile picker is off
+            // (`ConsoleOptions::profiles`) so nothing is hidden, the PS5's card offers no Keep
+            // address row, and no row is `local`.
             ConsoleCmd::RefreshRunning { .. }
             | ConsoleCmd::SetClipboard { .. }
             | ConsoleCmd::PromptAnswer { .. }
@@ -478,7 +482,9 @@ impl Service {
             | ConsoleCmd::WakeProfile { .. }
             | ConsoleCmd::SetProfile { .. }
             | ConsoleCmd::SetHidden { .. }
-            | ConsoleCmd::FetchHidden { .. } => {}
+            | ConsoleCmd::FetchHidden { .. }
+            | ConsoleCmd::SetKeepAddress { .. }
+            | ConsoleCmd::LaunchLocal { .. } => {}
         }
     }
 
@@ -1274,6 +1280,7 @@ fn discovered_row(d: &DiscoveredHost) -> HostRow {
         mgmt_port: d.mgmt_port.unwrap_or(DEFAULT_MGMT_PORT),
         can_wake: false,
         clipboard_sync: false,
+        keep_addr: false,
         last_used: None,
         os: d.os.clone(),
         // Unpaired: there is nothing it would let this console do to it.
@@ -1286,6 +1293,7 @@ fn discovered_row(d: &DiscoveredHost) -> HostRow {
         // `LibraryGame::running` is false here. Empty renders as no line.
         running: String::new(),
         screens: None,
+        local: false,
     }
 }
 

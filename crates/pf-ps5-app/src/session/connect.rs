@@ -402,6 +402,7 @@ mod tests {
             width,
             height,
             refresh_hz,
+            refresh_mhz: 0,
         }
     }
 
